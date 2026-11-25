@@ -415,11 +415,12 @@ class GatewayClient:
     def send(self, to_role: str, title: str, instructions: str, to_instance: Optional[str] = None,
              depends_on: Optional[List[str]] = None, requires_approval: bool = False,
              max_retries: int = 0, escalate_to_role: Optional[str] = None,
-             extra_payload: Optional[dict] = None, priority: int = 0) -> dict:
+             extra_payload: Optional[dict] = None, priority: int = 0, *,
+             job_id: Optional[str] = None) -> dict:
         """Drop a task/message into another agent's dropbox.
 
-        `extra_payload` is merged into input_payload (e.g. the workflow
-        thread stamp {"workflow": {"name", "run", "step"}})."""
+        `extra_payload` is merged into input_payload (e.g. a workflow thread stamp).
+        If set, `job_id` provides the UUID for an idempotent create."""
         input_payload: dict[str, Any] = {"prompt": instructions}
         if extra_payload:
             input_payload.update(extra_payload)
@@ -439,6 +440,8 @@ class GatewayClient:
             payload["escalate_to_role"] = escalate_to_role
         if priority:
             payload["priority"] = priority
+        if job_id is not None:
+            payload["id"] = job_id
         with self._client() as c:
             r = c.post("/api/jobs", json=payload)
             r.raise_for_status()
@@ -527,6 +530,15 @@ class GatewayClient:
             params["limit"] = limit
         with self._client() as c:
             r = c.get("/api/jobs", params=params or None)
+            r.raise_for_status()
+            return r.json()
+
+    def get_job(self, job_id: str) -> Optional[dict]:
+        """Read one visible job by ID, including archived jobs."""
+        with self._client() as c:
+            r = c.get(f"/api/jobs/{job_id}")
+            if r.status_code == 404:
+                return None
             r.raise_for_status()
             return r.json()
 

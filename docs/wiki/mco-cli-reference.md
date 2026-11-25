@@ -41,6 +41,11 @@ This reference covers every registered command and group recursively, every posi
   - [mco fleet set](#cli-mco-fleet-set) — Update one worker field in ~/.mco/fleet.toml.
   - [mco fleet status](#cli-mco-fleet-status) — Show configured workers and their installed/running state.
 - [mco gui](#cli-mco-gui) — Open the BitCadence console in your browser.
+- [mco handoff](#cli-mco-handoff) — Post and reconcile a build program.
+  - [mco handoff advance](#cli-mco-handoff-advance) — Advance the build program by one pass.
+  - [mco handoff post](#cli-mco-handoff-post) — Post builds whose dependencies have merged.
+  - [mco handoff status](#cli-mco-handoff-status) — Read package and PR state without posting.
+  - [mco handoff watch](#cli-mco-handoff-watch) — Advance the program repeatedly in the foreground.
 - [mco helpers](#cli-mco-helpers) — Your helpers: who is ready, busy or stuck.
   - [mco helpers add](#cli-mco-helpers-add) — Add a helper (same as `mco register`, asking for what it needs).
   - [mco helpers fix](#cli-mco-helpers-fix) — Find a locked notes file or a second copy of a helper, and offer to fix it.
@@ -618,6 +623,51 @@ Implementation: [src/mco/cli.py:1104](../../src/mco/cli.py#L1104). Global/group 
 | <a id="cli-mco-gui-param-dashboard"></a>`--dashboard` | BOOLEAN; flag; optional | `false` | Open the minimal dashboard instead of the full console. |
 | <a id="cli-mco-gui-param-print-only"></a>`--print` | BOOLEAN; flag; optional | `false` | Print the URL instead of opening a browser. |
 | <a id="cli-mco-gui-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-handoff"></a>
+## `mco handoff`
+
+Use the same gateway identity for the life of a program. Configure its builder and reviewer instances in `~/.mco/deployment/handoff.toml` and map repository aliases in the adjacent `repos.toml`. See the [synthetic configuration](../../configs/handoff.example.toml). Live reconciliation uses authenticated `gh` access to those repositories.
+
+- <a id="cli-mco-handoff-param-help"></a>`--help` shows the available subcommands.
+
+<a id="cli-mco-handoff-advance"></a>
+## `mco handoff advance`
+
+Run one reconciliation pass. The harness posts reviews, fixes, and approval jobs as packages become eligible. After approved merge jobs complete, it verifies the reviewed PR heads were merged before posting dependent builds.
+
+- <a id="cli-mco-handoff-advance-param-program"></a>`--program` selects the build program TOML and is required.
+- <a id="cli-mco-handoff-advance-param-config"></a>`--config` overrides the private handoff configuration path.
+- <a id="cli-mco-handoff-advance-param-help"></a>`--help` shows command options.
+
+<a id="cli-mco-handoff-post"></a>
+## `mco handoff post`
+
+Preview builds with `bitcadence handoff post --program docs/plan/packages.toml --dry-run`. Without a private configuration, the preview shows the initial packages with no dependencies. Repeating a live post reuses existing build jobs.
+
+- <a id="cli-mco-handoff-post-param-program"></a>`--program` selects the build program TOML and is required.
+- <a id="cli-mco-handoff-post-param-config"></a>`--config` overrides the private handoff configuration path.
+- <a id="cli-mco-handoff-post-param-dry-run"></a>`--dry-run` prints ready builds without posting them.
+- <a id="cli-mco-handoff-post-param-help"></a>`--help` shows command options.
+
+<a id="cli-mco-handoff-status"></a>
+## `mco handoff status`
+
+Read current package states and see which checks, approvals, or dependencies are outstanding.
+
+- <a id="cli-mco-handoff-status-param-program"></a>`--program` selects the build program TOML and is required.
+- <a id="cli-mco-handoff-status-param-config"></a>`--config` overrides the private handoff configuration path.
+- <a id="cli-mco-handoff-status-param-help"></a>`--help` shows command options.
+
+<a id="cli-mco-handoff-watch"></a>
+## `mco handoff watch`
+
+Run reconciliation passes in the foreground and print state changes. Stop with Ctrl+C.
+
+- <a id="cli-mco-handoff-watch-param-program"></a>`--program` selects the build program TOML and is required.
+- <a id="cli-mco-handoff-watch-param-config"></a>`--config` overrides the private handoff configuration path.
+- <a id="cli-mco-handoff-watch-param-interval"></a>`--interval` sets the delay between passes in seconds. The default is 30 and the minimum is 1.
+- <a id="cli-mco-handoff-watch-param-help"></a>`--help` shows command options.
 
 <a id="cli-mco-helpers"></a>
 ## `mco helpers`

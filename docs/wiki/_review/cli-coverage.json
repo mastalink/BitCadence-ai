@@ -2473,6 +2473,465 @@
       "ignore_unknown_options": false
     },
     {
+      "path": "mco handoff",
+      "aliases": [
+        "bitcadence handoff"
+      ],
+      "anchor": "cli-mco-handoff",
+      "group": true,
+      "hidden": false,
+      "help": "Post and reconcile a build program.",
+      "source": null,
+      "line": null,
+      "inherited_groups": [
+        "mco"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco handoff advance",
+      "aliases": [
+        "bitcadence handoff advance"
+      ],
+      "anchor": "cli-mco-handoff-advance",
+      "group": false,
+      "hidden": false,
+      "help": "Advance the build program by one pass.",
+      "source": "src/mco/cli.py",
+      "line": 3635,
+      "inherited_groups": [
+        "mco",
+        "mco handoff"
+      ],
+      "parameters": [
+        {
+          "name": "program",
+          "kind": "option",
+          "tokens": [
+            "--program"
+          ],
+          "type": "PATH",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Path to the build program TOML.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-advance-param-program"
+        },
+        {
+          "name": "config",
+          "kind": "option",
+          "tokens": [
+            "--config"
+          ],
+          "type": "PATH",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Private handoff configuration.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-advance-param-config"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-advance-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco handoff post",
+      "aliases": [
+        "bitcadence handoff post"
+      ],
+      "anchor": "cli-mco-handoff-post",
+      "group": false,
+      "hidden": false,
+      "help": "Post builds whose dependencies have merged.",
+      "source": "src/mco/cli.py",
+      "line": 3616,
+      "inherited_groups": [
+        "mco",
+        "mco handoff"
+      ],
+      "parameters": [
+        {
+          "name": "program",
+          "kind": "option",
+          "tokens": [
+            "--program"
+          ],
+          "type": "PATH",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Path to the build program TOML.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-post-param-program"
+        },
+        {
+          "name": "config",
+          "kind": "option",
+          "tokens": [
+            "--config"
+          ],
+          "type": "PATH",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Private handoff configuration.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-post-param-config"
+        },
+        {
+          "name": "dry_run",
+          "kind": "option",
+          "tokens": [
+            "--dry-run"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": false,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show ready builds without posting.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-post-param-dry-run"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-post-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco handoff status",
+      "aliases": [
+        "bitcadence handoff status"
+      ],
+      "anchor": "cli-mco-handoff-status",
+      "group": false,
+      "hidden": false,
+      "help": "Read package and PR state without posting.",
+      "source": "src/mco/cli.py",
+      "line": 3626,
+      "inherited_groups": [
+        "mco",
+        "mco handoff"
+      ],
+      "parameters": [
+        {
+          "name": "program",
+          "kind": "option",
+          "tokens": [
+            "--program"
+          ],
+          "type": "PATH",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Path to the build program TOML.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-status-param-program"
+        },
+        {
+          "name": "config",
+          "kind": "option",
+          "tokens": [
+            "--config"
+          ],
+          "type": "PATH",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Private handoff configuration.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-status-param-config"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-status-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco handoff watch",
+      "aliases": [
+        "bitcadence handoff watch"
+      ],
+      "anchor": "cli-mco-handoff-watch",
+      "group": false,
+      "hidden": false,
+      "help": "Advance the program repeatedly in the foreground.",
+      "source": "src/mco/cli.py",
+      "line": 3644,
+      "inherited_groups": [
+        "mco",
+        "mco handoff"
+      ],
+      "parameters": [
+        {
+          "name": "program",
+          "kind": "option",
+          "tokens": [
+            "--program"
+          ],
+          "type": "PATH",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Path to the build program TOML.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-watch-param-program"
+        },
+        {
+          "name": "config",
+          "kind": "option",
+          "tokens": [
+            "--config"
+          ],
+          "type": "PATH",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Private handoff configuration.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-watch-param-config"
+        },
+        {
+          "name": "interval",
+          "kind": "option",
+          "tokens": [
+            "--interval"
+          ],
+          "type": "FLOAT RANGE",
+          "required": false,
+          "default": 30.0,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Seconds between foreground passes.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": 1.0,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-watch-param-interval"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-watch-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
       "path": "mco helpers",
       "aliases": [
         "bitcadence helpers"

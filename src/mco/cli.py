@@ -3569,6 +3569,88 @@ def advanced(ctx: typer.Context):
         raise typer.Exit(code=e.exit_code)
 
 
+handoff_app = typer.Typer(help="Post and reconcile a build program.")
+app.add_typer(handoff_app, name="handoff")
+
+
+def _run_handoff(command: str, program: Path, config: Optional[Path],
+                 dry_run: bool = False, interval: float = 30.0) -> None:
+    import time
+
+    import httpx
+
+    from mco.handoff import DEFAULT_CONFIG, GitHub, Harness, load_deployment, load_program
+
+    try:
+        plan = load_program(program)
+        config = config or DEFAULT_CONFIG
+        if dry_run and not config.exists():
+            for package in plan.initial_ready():
+                typer.echo(f"{package.id}  {package.title}  (initial ready)")
+            return
+        harness = Harness(plan, load_deployment(config), _gateway_client(), GitHub())
+        if command == "post":
+            states = harness.post(dry_run=dry_run)
+            for package_id, state in states.items():
+                if not dry_run or state == "ready to post":
+                    typer.echo(f"{package_id}  {plan.packages[package_id].title}  ({state})")
+            return
+        previous = {}
+        while True:
+            states = harness.status() if command == "status" else harness.advance()
+            for package_id, state in states.items():
+                if previous.get(package_id) != state:
+                    typer.echo(f"{package_id}  {state}")
+            if command != "watch":
+                return
+            previous = states
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        if command != "watch":
+            raise
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError, httpx.HTTPError) as exc:
+        typer.echo(f"Handoff error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+
+@handoff_app.command("post")
+def handoff_post(
+    program: Path = typer.Option(..., "--program", help="Path to the build program TOML."),
+    config: Optional[Path] = typer.Option(None, "--config", help="Private handoff configuration."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show ready builds without posting."),
+):
+    """Post builds whose dependencies have merged."""
+    _run_handoff("post", program, config, dry_run=dry_run)
+
+
+@handoff_app.command("status")
+def handoff_status(
+    program: Path = typer.Option(..., "--program", help="Path to the build program TOML."),
+    config: Optional[Path] = typer.Option(None, "--config", help="Private handoff configuration."),
+):
+    """Read package and PR state without posting."""
+    _run_handoff("status", program, config)
+
+
+@handoff_app.command("advance")
+def handoff_advance(
+    program: Path = typer.Option(..., "--program", help="Path to the build program TOML."),
+    config: Optional[Path] = typer.Option(None, "--config", help="Private handoff configuration."),
+):
+    """Advance the build program by one pass."""
+    _run_handoff("advance", program, config)
+
+
+@handoff_app.command("watch")
+def handoff_watch(
+    program: Path = typer.Option(..., "--program", help="Path to the build program TOML."),
+    config: Optional[Path] = typer.Option(None, "--config", help="Private handoff configuration."),
+    interval: float = typer.Option(30.0, "--interval", min=1.0, help="Seconds between foreground passes."),
+):
+    """Advance the program repeatedly in the foreground."""
+    _run_handoff("watch", program, config, interval=interval)
+
+
 def main():
     # pythonw (the login entry, the tray) has no console: give print() a sink.
     for name in ("stdout", "stderr"):
