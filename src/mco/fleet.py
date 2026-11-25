@@ -16,7 +16,10 @@ except ModuleNotFoundError:  # pragma: no cover
 from mco import service
 
 FLEET_CONFIG_PATH = Path.home() / ".mco" / "fleet.toml"
-VALID_MODES = {"waker", "poll", "off"}
+# "pane": the waker runs inside the herdr cockpit (mco.cockpit) instead of as an OS service - no Scheduled
+# Task, no console window, output readable/attachable in the `agents` workspace. `fleet apply` removes the
+# worker's waker/poll services; `bitcadence cockpit up` starts the pane.
+VALID_MODES = {"waker", "poll", "pane", "off"}
 ALLOWED_FIELDS = {"role", "instance", "mode", "exec", "min_interval", "poll_interval", "background"}
 
 
@@ -100,9 +103,9 @@ def parse_fleet_data(data: dict[str, Any]) -> dict[str, WorkerConfig]:
         instance = _optional_string(raw, "instance", worker) or worker
         mode = _required_string(raw, "mode", worker)
         if mode not in VALID_MODES:
-            raise FleetConfigError(f"workers.{worker}.mode must be one of: off, poll, waker")
+            raise FleetConfigError(f"workers.{worker}.mode must be one of: off, pane, poll, waker")
         exec_command = _optional_string(raw, "exec", worker)
-        if mode in {"waker", "poll"} and not exec_command:
+        if mode in {"waker", "poll", "pane"} and not exec_command:
             raise FleetConfigError(f"workers.{worker}.exec is required when mode={mode}")
         parsed[worker] = WorkerConfig(
             worker=worker,
@@ -129,7 +132,7 @@ def missing_agent_tokens(workers: dict[str, Any]) -> list[str]:
 
     missing = []
     for worker in workers.values():
-        if worker.mode not in {"waker", "poll"} or not worker.instance:
+        if worker.mode not in {"waker", "poll", "pane"} or not worker.instance:
             continue
         if not read_agent_token_file(worker.instance):
             missing.append(worker.instance)
@@ -183,6 +186,10 @@ def apply_fleet(path: Path = FLEET_CONFIG_PATH) -> list[str]:
                 raise FleetConfigError(detail)
             installed.add(worker.poll_service_name)
             installed.discard(worker.waker_service_name)
+        elif worker.mode == "pane":
+            # never two runners for one worker: the cockpit pane replaces both OS services
+            summaries.extend(_uninstall_if_present([worker.waker_service_name, worker.poll_service_name], installed))
+            summaries.append(f"{worker.worker}: pane (runs in the cockpit; start it with `bitcadence cockpit up`)")
         else:
             removed = _uninstall_if_present([worker.waker_service_name, worker.poll_service_name], installed)
             summaries.extend(removed or [f"{worker.worker}: off (no installed worker service)"])
@@ -305,7 +312,7 @@ def _coerce_assignment_value(key: str, value: str) -> str | int | float | bool:
             raise FleetConfigError("background must be true or false")
         return lowered == "true"
     if key == "mode" and value not in VALID_MODES:
-        raise FleetConfigError("mode must be one of: off, poll, waker")
+        raise FleetConfigError("mode must be one of: off, pane, poll, waker")
     return value
 
 
