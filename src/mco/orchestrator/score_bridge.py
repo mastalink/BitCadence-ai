@@ -44,6 +44,31 @@ def encoded(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
+def strict_result(output_payload):
+    """Decode either connector envelope without repairing or extracting prose."""
+    def reject_constant(value):
+        raise ValueError(f"Non-JSON constant: {value}")
+
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"Duplicate JSON key: {key}")
+            result[key] = value
+        return result
+
+    try:
+        raw = output_payload if isinstance(output_payload, str) else output_payload["result"]
+        if not isinstance(raw, str):
+            raise TypeError("Result must be JSON text")
+        output = json.loads(raw, parse_constant=reject_constant, object_pairs_hook=unique_object)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ScoreError("Strict JSON result required") from exc
+    if not isinstance(output, dict):
+        raise ScoreError("JSON result must be an object")
+    return output
+
+
 class GatewayBoard:
     def __init__(self, client):
         self.client = client
@@ -670,6 +695,15 @@ class ScoreBridge:
             self.identity(run, board)
             if run["status"] != "blocked":
                 return False
+            last_block = db.execute(
+                "SELECT event, detail FROM events WHERE run=? AND "
+                "event IN ('validation_blocked','tick_blocked','deadline_exceeded','job_blocked',"
+                "'gate_rejected','run_blocked','adapter_failed','rejected') ORDER BY seq DESC LIMIT 1",
+                (run_id,),
+            ).fetchone()
+            if (last_block is not None and last_block["event"] == "validation_blocked"
+                    and json.loads(last_block["detail"]).get("reason") == "Strict JSON result required"):
+                raise ScoreError("Use the explicit retry-validation command for a result envelope block")
             overdue = [(r[0], r[1]) for r in db.execute(
                 "SELECT job_id,deadline FROM dispatch WHERE run=? AND status='submitted' AND deadline<=?",
                 (run_id, int(self.clock())))]
@@ -696,6 +730,112 @@ class ScoreBridge:
             self.event(db, run_id, "resumed", {"from": "blocked", "on_time_results": on_time,
                                                "policy": "revalidate; nothing is accepted unchecked"})
         return True
+
+    @staticmethod
+    def completion_result(row, job, board, *, allow_event_lag=False):
+        payload = json.loads(row["payload"])
+        expected = payload["target_agent_id"]
+        if job.get("leased_by_instance_id") != expected:
+            raise ScoreError("Missing authenticated lease/completion identity")
+        completions = [e for e in board.events(row["job_id"])
+                       if e.get("job_id") == row["job_id"] and e.get("event") == "status:completed"]
+        if not completions and allow_event_lag and _recently_completed(job):
+            return None
+        if not any(e.get("actor_id") == expected and e.get("actor_role") == payload["target_agent_role"] for e in completions):
+            raise ScoreError("Missing authenticated lease/completion identity")
+        return strict_result(job.get("output_payload"))
+
+    @staticmethod
+    def independent_review(db, run_id, row):
+        if row["phase"] != "review":
+            return
+        work = db.execute("SELECT payload FROM dispatch WHERE run=? AND task=? AND phase='work'",
+                          (run_id, row["task"])).fetchone()
+        if work is None or json.loads(work["payload"])["target_agent_id"] == json.loads(row["payload"])["target_agent_id"]:
+            raise ScoreError("Independent identity required")
+
+    @staticmethod
+    def _review_result(output, evidence):
+        # Older passing workers can omit findings. Failed reviews still need them.
+        if output.get("verdict") == "pass" and output.get("findings") is None:
+            output = {**output, "findings": []}
+        findings = output.get("findings")
+        if (output.get("review_of") != evidence or output.get("verdict") not in ("pass", "fail")
+                or not isinstance(findings, list) or not all(isinstance(x, str) for x in findings)):
+            raise ScoreError("Review not bound to exact evidence")
+        return output
+
+    def retry_validation(self, run_id, board):
+        """One explicit, owner-authenticated retry of an audit envelope block.
+
+        Preflight and reopening are serialized. No dispatch, deadline extension,
+        job/result rewriting, reauthorization, or automatic retry is permitted.
+        """
+        with self.tx() as db:
+            run = self.run(db, run_id)
+            self.identity(run, board)
+            if db.execute("SELECT 1 FROM events WHERE run=? AND event='validation_retry'", (run_id,)).fetchone():
+                raise ScoreError("Validation retry budget exhausted")
+            if run["status"] != "blocked":
+                raise ScoreError("Validation retry requires a blocked run")
+            score = json.loads(run["definition"])
+            audit_caps = {"cloud:inspect", "repository:read", "evidence:write", "evidence:review"}
+            if score["budget_cents"] or any(set(t["capabilities"]) - audit_caps or t["max_cost_cents"] for t in score["tasks"]):
+                raise ScoreError("Validation retry supports only read-only audit runs")
+            blockers = [dict(r) for r in db.execute(
+                "SELECT seq,event,detail FROM events WHERE run=? AND event IN "
+                "('validation_blocked','tick_blocked','deadline_exceeded','job_blocked','gate_rejected','run_blocked','adapter_failed','rejected') ORDER BY seq", (run_id,))]
+            if not blockers or any(r["event"] != "validation_blocked" or json.loads(r["detail"]).get("reason") != "Strict JSON result required" for r in blockers):
+                raise ScoreError("Run must be blocked solely on Strict JSON result required")
+            rows = [dict(r) for r in db.execute("SELECT * FROM dispatch WHERE run=? ORDER BY task,phase", (run_id,))]
+            if any(r["status"] in ("rejected", "failed", "cancelled", "halted") for r in rows):
+                raise ScoreError("Rejected or failed dispatch cannot be retried")
+            active = [r for r in rows if r["status"] in ("planned", "sending", "submitted")]
+            if any(r["deadline"] <= int(self.clock()) for r in active):
+                raise ScoreError("Validation retry cannot extend expired deadlines")
+            binding = db.execute("SELECT grant_id FROM standing_authority WHERE run=?", (run_id,)).fetchone()
+            if binding:
+                self._check_standing_score(score, run["org"], run_id, binding["grant_id"])
+            completed = []
+            for row in rows:
+                if row["status"] not in ("submitted", "validated", "accepted"):
+                    continue
+                job = board.get(row["job_id"])
+                self.validate_job(run, row, job)
+                if job.get("status") in ("failed", "rejected", "cancelled", "halted"):
+                    raise ScoreError("Rejected or failed job cannot be retried")
+                if job.get("status") != "completed":
+                    if row["status"] != "submitted":
+                        raise ScoreError("Previously validated job is no longer completed")
+                    continue
+                self.independent_review(db, run_id, row)
+                output = self.completion_result(row, job, board)
+                contract = json.loads(row["payload"])["input_payload"]["score"]
+                if row["phase"] == "work":
+                    evidence = self.artifacts(output.get("artifacts"), contract["required_evidence"])
+                    if row["status"] == "validated" and evidence != json.loads(row["evidence"]):
+                        raise ScoreError("Previously validated evidence changed")
+                else:
+                    evidence = self.artifacts(contract["review_of"], contract["required_evidence"])
+                    if self._review_result(output, evidence)["verdict"] != "pass":
+                        raise ScoreError("Rejected or unbound review cannot be retried")
+                    if row["status"] == "accepted" and evidence != json.loads(row["evidence"]):
+                        raise ScoreError("Previously accepted review evidence changed")
+                if row["status"] == "submitted":
+                    completed.append(row["job_id"])
+            if not completed:
+                raise ScoreError("Validation retry requires completed submitted evidence")
+            self.identity(run, board)
+            if any(r["deadline"] <= int(self.clock()) for r in active):
+                raise ScoreError("Validation retry cannot extend expired deadlines")
+            self.event(db, run_id, "validation_retry", {
+                "principal": run["principal"], "org": run["org"], "digest": run["digest"],
+                "attempt": 1, "blocked_events": [r["seq"] for r in blockers], "jobs": completed,
+                "deadlines": {r["job_id"]: r["deadline"] for r in active},
+            })
+            db.execute("UPDATE runs SET status='running' WHERE id=?", (run_id,))
+        self.poll(run_id, board)
+        return self.status(run_id)
 
     def poll(self, run_id, board):
         self.check_standing_authority(run_id)
@@ -734,24 +874,13 @@ class ScoreBridge:
                 continue
             payload = json.loads(row["payload"])
             expected = payload["target_agent_id"]
-            if job.get("leased_by_instance_id") != expected:
-                raise ScoreError("Missing authenticated lease/completion identity")
-            completions = [e for e in board.events(row["job_id"])
-                           if e.get("job_id") == row["job_id"] and e.get("event") == "status:completed"]
-            if not completions and _recently_completed(job):
-                # The job row can read as completed a moment before its completion
-                # event is visible (separate writes, concurrent readers since #136;
-                # seen live 2026-10-06). Within a short grace window that is "not
-                # yet authenticated", not a forgery: check again on the next poll.
+            if row["phase"] == "review":
+                with self.tx() as db:
+                    self.independent_review(db, run_id, row)
+            output = self.completion_result(row, job, board, allow_event_lag=True)
+            if output is None:
+                # A recent completion can be visible before its audit event.
                 continue
-            if not any(e.get("actor_id") == expected and e.get("actor_role") == payload["target_agent_role"] for e in completions):
-                raise ScoreError("Missing authenticated lease/completion identity")
-            try:
-                output = json.loads(job["output_payload"]["result"])
-            except (KeyError, TypeError, ValueError) as exc:
-                raise ScoreError("Strict JSON result required") from exc
-            if not isinstance(output, dict):
-                raise ScoreError("JSON result must be an object")
             contract = payload["input_payload"]["score"]
             tasks = json.loads(run["definition"])["tasks"]
             task_id = row["task"]
@@ -914,24 +1043,14 @@ class ScoreBridge:
                     evidence = self.artifacts(output.get("artifacts"), contract["required_evidence"])
                     status = "validated"
             else:
-                # A passing review with nothing to report often leaves the
-                # findings list out. That is an empty list, not a broken
-                # review: the verdict and the exact evidence binding are still
-                # checked below. A fail must still say why.
-                if isinstance(output, dict) and output.get("verdict") == "pass" and output.get("findings") is None:
-                    output = {**output, "findings": []}
                 if is_repo_write:
                     evidence = contract["review_of"]
                     if not isinstance(evidence, dict) or set(evidence) != set(contract["required_evidence"]):
                         raise ScoreError("Review evidence mismatch")
-                    if output.get("review_of") != evidence or output.get("verdict") not in ("pass", "fail") or not isinstance(output.get("findings"), list) or not all(isinstance(x, str) for x in output["findings"]):
-                        raise ScoreError("Review not bound to exact evidence")
-                    status = "accepted" if output["verdict"] == "pass" else "rejected"
                 else:
                     evidence = self.artifacts(contract["review_of"], contract["required_evidence"])
-                    if output.get("review_of") != evidence or output.get("verdict") not in ("pass", "fail") or not isinstance(output.get("findings"), list) or not all(isinstance(x, str) for x in output["findings"]):
-                        raise ScoreError("Review not bound to exact evidence")
-                    status = "accepted" if output["verdict"] == "pass" else "rejected"
+                output = self._review_result(output, evidence)
+                status = "accepted" if output["verdict"] == "pass" else "rejected"
             with self.tx() as db:
                 if db.execute("UPDATE dispatch SET status=?,evidence=? WHERE job_id=? AND status='submitted'", (status, encoded(evidence), row["job_id"])).rowcount:
                     self.event(db, run_id, status, {"job_id": row["job_id"], "actor": expected, "result": output})
