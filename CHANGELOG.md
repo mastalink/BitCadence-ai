@@ -1,0 +1,342 @@
+# Changelog
+
+All notable changes. Format: [Keep a Changelog](https://keepachangelog.com); versioning: semver.
+
+## [Unreleased]
+
+### Added
+- NVIDIA NIM worker (`python -m mco.workers.nim`): runs governed jobs on
+  NVIDIA's hosted API catalog or a self-hosted NIM container, streams with a
+  lease check between chunks, and records the model in the handoff. Guide:
+  docs/integrations/nvidia-nim.md.
+- "NVIDIA NIM (API catalog)" provider in Settings -> Model Connections.
+- `scripts/demo_nim_gated.py`: live approval-gated NIM run with audit trail.
+
+## [0.6.0] - 2026-10-09
+
+The plain-language redesign (slices 2-7), shared-GPU resource leases, Score
+reliability fixes, and a license change: Core is now under the Prosperity
+Public License 3.0.0 from Batoncadence LLC (source-available; free for
+personal and noncommercial use). Releases up to and including 0.5.0rc1 stay
+MIT. Release notes: docs/RELEASE-NOTES-0.6.0.md.
+
+### Added
+- Exclusive resource lease arbiter for shared GPU nights (#125).
+
+### Fixed
+- Score jobs dispatch at priority 50, above normal board traffic (#139); a
+  late completion event gets a 15-minute grace before a run blocks (#141); a
+  blocked or failed run pushes the owner once (#142); stale alerts no longer
+  replay (#143).
+- The ntfy topic lookup from AWS Secrets Manager is bounded (3 s / 5 s) and
+  cached, so it can't hold up gateway startup (#144).
+- Helpers: a Windows venv launcher and its child count as one copy, so healthy
+  helpers aren't shown as Stuck and Fix it can't stop the real worker (#147).
+
+### License
+- Core moves from MIT to the Prosperity Public License 3.0.0; licensor
+  Batoncadence LLC; COMMERCIAL-LICENSE.md and a draft CLA added (#140).
+
+### Redesign
+- `bitcadence start` now runs quietly: no console window, a tray status light
+  (green/amber/red plus a word), a one-time loopback sign-in link instead of a
+  pasted token, and a per-user start-at-sign-in entry (no administrator).
+  First run ends on a "You're all set" screen.
+- `mco register` failures are plain sentences; `helpers add` undoes its
+  registration if no credential could be saved; cron errors are recognised by
+  type, not by message text.
+
+### Changed
+- **Connect an AI** page and `bitcadence connect [claude|codex|gemini|antigravity|cursor|other]`:
+  one tap per app finds it and adds BitCadence to its connection settings, keeping a
+  `.bak` of the original first. Adds Codex (`config.toml`), Antigravity, `--disconnect`,
+  `--test` and a copyable code for "another app". New `/api/connect-ai` routes.
+
+- **Ask for something** replaces the drag-and-drop workflow builders. The console
+  page and `bitcadence ask` share one planner: a plain-language request, a drawn
+  plan, one Approve, and light tweaks (remove a step, always ask me, make it
+  repeat). New `/api/ask/plan` and `/api/ask/start`.
+
+- **Helpers** page and `bitcadence helpers`: friendly names, a health light with a
+  word, and what each helper is doing in plain words. Add a helper (same path as
+  `bitcadence helpers add`, the sign-in is never shown in full) and **Fix it**,
+  which finds a locked worker log or a duplicate wake process with a dry run first
+  and repairs only after a confirm (`bitcadence helpers fix`, also part of
+  `bitcadence fix`). New `/api/helpers`, `/api/helpers/add`, `/api/helpers/fix`.
+
+- **Schedules** page and `bitcadence schedule add|on|off`: pick what, how often and
+  what time, and see "Every weekday at 2:00 AM" instead of a cron line. Written to
+  `~/.mco/schedules.yaml` as text so comments survive. New `/api/schedules`.
+- **Approvals** show no raw 403. A missing approver right gives one sentence and a
+  one-key "Fix it? [Y/n]" in `bitcadence approve` and `bitcadence fix`; the console
+  explains it in words. The repair is terminal-only and local-database-only.
+- **Settings** use plain labels; the address and masked sign-in appear only under
+  `bitcadence settings --show-advanced` or **Show advanced** in the console.
+
+### Removed
+- The Flow Control page (`/flow`) and the console's visual workflow builder.
+  Workflow YAML still runs through `bitcadence ask --file` and `mco workflow`;
+  `mco gui --flow` now opens the console.
+
+## [0.5.0rc1] - 2026-09-22
+
+Public preview of the new Jev-enabled BitCadence. This is a release candidate,
+not the stable 0.5.0 release: the live AWS release-candidate chaos board remains
+a separate gate. Jev is optional and disabled by default. The shipped routing
+integrations are advisory, and operational integrations are annotation-only.
+The website and Jev setup guide explain the two-speed design and BitCadence's
+scope boundaries.
+
+### Added
+- **B01: BitCadence can now build itself, under governance.** Score v1 gained a
+  `repository:write` capability: a Score task can commit real changes to an
+  isolated, disposable git worktree/branch — never `main`/`deploy/local`, never
+  pushed or merged by the automation itself — enforced by a hardcoded denylist,
+  an exact-parent-commit check, and a path allowlist inside the adapter, not
+  just operator discipline. Every commit requires a human-issued, signed grant
+  (`GrantService`) scoped to the exact run and score digest; `authenticated_human()`
+  categorically refuses any agent bearer token, so no automation can grant
+  itself write authority. On 2026-09-18 this produced BitCadence's first real
+  (non-adversarial-proof) self-authored commit: antigravity wrote the change,
+  claude independently reviewed and accepted it, a human issued the grant. Two
+  pieces of tooling replace what was a one-off hand-run script for that first
+  run: `mco score start`/`mco score tick --live-repository-write` (opt-in;
+  every other invocation stays exactly as dark-by-default as before), and a
+  real operator console at `GET /api/score/grants/console` for issuing grants
+  from a form instead of a hand-pasted DevTools snippet. A blocked/failed Score
+  run has no resume path by design — governance state only ever moves forward
+  or stops, never silently retries.
+- **Lease TTL adapts to the work instead of one flat window.** The default lease
+  (`MCO_LEASE_TTL_SECONDS`) is raised from 15 minutes to one hour: careful work
+  (a full review, a large refactor) routinely outlived 15 minutes, so a live
+  worker's lease silently expired mid-task and its own completion 409'd on a
+  fence it never saw. `mco_lease` / `mco_lease_next` / `mco_renew` now take an
+  optional `estimated_seconds` - how long the worker itself expects the work
+  to take, or at renew time how much *more* it needs - and the gateway adds a
+  buffer (`MCO_LEASE_BUFFER_FLOOR_SECONDS` / `MCO_LEASE_BUFFER_FRACTION`) and
+  uses that as the lease's actual TTL, clamped to
+  `MCO_LEASE_MIN_TTL_SECONDS`/`MCO_LEASE_MAX_TTL_SECONDS` (5 min–4 h by
+  default) so neither a tiny nor a runaway estimate produces a useless or
+  near-permanent lease. `reclaim_stale_leases` needed no change: it always
+  reads the `lease_expires_at` a lease or renewal actually wrote, so an
+  abandoned job still comes back to `pending` at any TTL this can produce.
+- **A chain that forgets to hand off is now caught.** The delivery watchdog only
+  saw jobs that exist, so a worker finishing its own job and never dispatching the
+  next one left an empty board that looked healthy while the mission was dead
+  (a real Score packet chain sat two hours that way). Send a chain link with
+  `mco_send(..., expects_successor=True)`: if its worker completes and no follow-up
+  job appears within the stall window, the gateway records a `chain_stalled` audit
+  event, broadcasts it, hands the stall to `MCO_CHAIN_STALL_TO_ROLE` (default
+  `chief`, blank to disable) and pushes once.
+- **Notification budget.** Every job transition pushed to ntfy, which exhausted
+  the server's rate limit (73 dropped with 429 in one day) and buried the
+  escalations. Routine pushes now share an hourly budget (`NTFY_MAX_PER_HOUR`,
+  default 20) and identical messages repeat at most every `NTFY_REPEAT_AFTER`
+  seconds (default 600); priority >= `NTFY_URGENT_PRIORITY` (default 4) ignores the
+  budget, so a stuck job or a human gate is never dropped for a job-created notice.
+- **Score runs advance without anyone typing a tick.** The gateway can now drive
+  the conductor itself: every `MCO_SCORE_SWEEP_SECONDS` it advances each
+  unsettled run by one tick, wired into the lifespan beside the delivery
+  watchdog and run in a worker thread so the SQLite and board work never touches
+  the event loop. **Off by default** (`0` or negative disables it), so upgrading
+  a gateway never silently starts driving runs. A run is only swept by the
+  conductor credential that started it - another conductor's run is skipped, not
+  blocked - and accepted, blocked, failed and launched runs are left alone. One
+  failing run is logged and named in `/readyz` (`checks.score_sweep.failing_runs`)
+  while the rest of the sweep continues; a failure of the sweep itself makes the
+  gateway report not ready.
+- **Interactive sessions hear about their MCO work.** `python -m mco.hooks.inbox
+  --instance <id> --role <role>` is a Claude Code SessionStart/UserPromptSubmit
+  hook: it tells the session (and the user) about jobs pinned to it, or addressed
+  to its role and untaken for 5 minutes, then only new arrivals, checking the
+  gateway at most once a minute on prompts. It exits silently on any failure and
+  frames job titles as data the model should surface, not act on.
+- **Agents report what they are doing, not just when they were last heard from.**
+  `/api/agents` (and `mco_agents`, `mco agents`) adds `state`: `working` (holds a
+  lease), `standby` (reachable, nothing waiting), `broken` (reachable, but work
+  addressed to it has stalled past the delivery window or was rerouted away in the
+  last hour, with `state_reason`), `offline`, or `disabled`. A waker holding the
+  broadcast socket now counts as online (`connected: true`) even though it never
+  polls. The delivery watchdog only reroutes to roles with a `standby` or `working`
+  agent, and `/readyz` lists `broken_workers`. Derived at read time; no schema change.
+- **Delivery watchdog.** The gateway now makes sure pending work reaches a worker
+  without a person telling an agent to look. A job left PENDING for
+  `MCO_DELIVERY_STALL_SECONDS` (default 600; `0` disables) is re-broadcast to wake
+  its role again; if still untaken after another window it is rerouted in place to
+  the first `MCO_ROUTE_FALLBACKS` role with an online agent (e.g.
+  `codex:claude, antigravity:claude|codex`), up to `MCO_DELIVERY_MAX_REROUTES`
+  (default 2). When nothing can take it, the job is escalated once: a
+  `delivery_escalated` audit event, a `job_undeliverable` broadcast, and an ntfy
+  push. Set `input_payload.no_reroute` to keep a job on its original target. All
+  steps are audit events, so restarts neither repeat nor forget them.
+
+### Fixed
+- **A hidden error dialog no longer freezes the desktop app.** Started to the tray,
+  a failed start showed a modal popup that blocked every later action, including
+  start requests, until someone clicked it. Errors now go to the status line while
+  the window is hidden. Start-all also keeps going past a worker that fails, and
+  waits up to 30 seconds for the gateway instead of giving up after one 1-second
+  probe. Previously a single slow probe left every later worker unstarted.
+- **A crash-looped worker no longer stays down forever.** The supervisor still
+  latches a worker that fails five times in five minutes, but now retries it after
+  a 15-minute cooldown (and on the first tick after restart when the failures are
+  old), instead of waiting for a manual `reset` that nobody knew to run.
+- **Unreadable token files are named as such.** A waker whose
+  `~/.mco/tokens/<instance>.token` exists but denies the current user (written by
+  an elevated or different account) now says so and how to fix the permissions,
+  instead of reporting "no token" and suggesting a rotation.
+
+### Changed
+- **Breaking: audit failures now fail the triggering operation.** A failed audit
+  write or required S3 acknowledgement no longer returns success. The database
+  mutation may already be committed; its transactional outbox preserves evidence.
+  Retry the same attempt and result after restoring the sink, rather than creating
+  duplicate work. The kill switch still fences active attempts during a sink outage.
+- Audit signing keys prefer the encrypted vault. Environment injection requires
+  `MCO_ALLOW_ENV_AUDIT_KEY=1` and emits a warning; ECS explicitly opts in for its
+  Secrets Manager injection. An inaccessible vault cannot be bypassed this way.
+- Evidence COMPLIANCE retention defaults to **one day**, including Terraform.
+  Existing locked versions keep their original retention. A durable S3 checkpoint
+  avoids re-uploading acknowledged events across restarts; chain verification
+  still reads the full history to detect corruption and rollback.
+- AWS lab runs only through manual dispatch on `main` or the completion candidate.
+  Bootstrap trust explicitly allows those two refs; remove the candidate after merge.
+- **Renamed: BatonCadence is now BitCadence** (`bitcadence.ai`). The tagline is
+  now *"Every agent. One beat."* — the drumline metaphor stays, the relay-race
+  pun goes. The Python distribution is `bitcadence`; **the CLI is still `mco`**,
+  every `MCO_*` environment variable is unchanged, and config still lives in
+  `~/.mco/`, so existing installs keep working without edits.
+- **Services register under the new brand** — `BitCadence-gateway`,
+  `bitcadence-gateway.service`, `com.bitcadence.gateway`. Machines installed
+  under the old names are still discovered, addressed, and uninstallable:
+  `mco service status|restart|logs|uninstall` resolve `BatonCadence-*` units,
+  tasks, and plists alongside the new ones. **To move a machine onto the new
+  names, run `mco service uninstall` then `mco service install`** — an
+  in-place upgrade leaves the old-named service running (and working).
+
+### Fixed
+- **Security (dropbox isolation):** `POST /api/jobs/lease` now enforces the
+  same addressee rule as the inbox and the completion endpoint - an agent may
+  only lease jobs addressed to its own role (or to its specific instance).
+  Previously the lease endpoint checked only org isolation, so any authenticated
+  agent could lease another agent's pending job; completion was still blocked,
+  so the job would strand in `leased` state and record a false actor in the
+  audit trail. The check mirrors the inbox filter, so a same-role sibling
+  instance is still blocked from an instance-targeted job.
+
+## [0.3.0] - 2026-07-01
+
+The parity release: everything the API can do, the CLI and the console can
+do too - plus the external security audit remediations.
+
+### Added
+- **`/metrics`** Prometheus endpoint (jobs by status, approval queue depth,
+  agents registered/online, kill-switch, database state); optional
+  `MCO_METRICS_TOKEN`. `MCO_LOG_JSON` for structured JSON logs.
+- **`mco service install/uninstall/status`**: boot-persistent gateway via
+  Windows Task Scheduler, Linux systemd --user, or macOS launchd.
+- **`mco upgrade`**: schema migration runner - LocalStore needs none;
+  Postgres auto-applies via DATABASE_URL + psycopg (recorded in
+  schema_migrations) or emits a combined script for the Supabase SQL editor.
+  Migrations now ship as package data.
+- **CLI parity**: `mco recall` / `mco remember` (Drumline from the
+  terminal), `mco settings` (the Control Panel whitelist without a
+  browser), `mco reset-token` / `mco deregister`, `mco orgs`, and
+  `mco watch` (live WebSocket event tail with automatic reconnect).
+- **Console: Memory screen** - search/tag recall of the Drumline shared
+  context plus an add-entry composer.
+- **Console: Activity screen** - the cross-job immutable audit trail with
+  client-side stats (24h throughput, failure rate, approval latency),
+  backed by the new `GET /api/events` feed (org-scoped, job-enriched).
+- **Console: Fleet admin** - register agents (one-time token), rotate
+  tokens, remove agents, and move agents between orgs (host operator,
+  one-way by design); **Tenancy card** to view/create orgs.
+- **Console: connector operations** - health dots, and "Sync now" next to
+  "Test connection"; new Connectors settings group (ServiceNow/Dynatrace)
+  with a server-side `test-connector` probe.
+- **Console live updates** over `/ws/broadcast` with polling fallback
+  (4s -> 30s safety net while the socket is up). The gateway accepts
+  token-only WebSocket auth (identity resolved from the token hash).
+- **Drumline dedup**: identical title|content|role returns the existing
+  entry (SHA-256 `content_hash`; migration `2026-07_drumline_dedup.sql`;
+  graceful fallback pre-migration). `mco doctor` warns when the migration
+  is pending.
+- Reproducible console build: `scripts/build_console.py extract|build|verify`
+  with editable sources in `src/mco/console_src/` (verified in CI).
+
+### Security (external audit remediation)
+- Drumline content is sanitized before storage: prompt-injection syntax is
+  neutralized in place (angle brackets to lookalikes, broken code fences,
+  tool-call markers dropped) - content survives, the teeth don't.
+- Tenant isolation for Drumline recall pushed into the SQL query for named
+  orgs, with the Python filter retained as defense-in-depth.
+- WebSocket disconnects are race-safe; `max_retries=0` is honored;
+  `supabase` pinned `<2.0.0`; routes/auth import cycle removed.
+
+### Changed
+- Drumline recall recency bias capped at 20% so relevance dominates.
+- Console job retry uses the dedicated `POST /api/jobs/{id}/retry`.
+- CI test matrix now covers Python 3.11 and 3.14.
+
+## [0.2.0] - 2026-06-12
+
+The enterprise-suite release: RBAC, SSO delegation, editions, the Context
+Exchange, a full web Control Panel, and an SDK.
+
+### Added
+- **Scoped-token RBAC**: every endpoint declares scopes; `mco register
+  --scope` issues least-privilege tokens; role-derived defaults keep
+  pre-RBAC installs behaving identically.
+- **Trusted-header SSO delegation** (enterprise): authenticate humans via
+  the reverse proxy you already run (oauth2-proxy, Cloudflare Access,
+  Authelia) - off by default, optional constant-time proxy secret.
+- **Edition model**: community / team / enterprise in one codebase,
+  inferred from config or pinned with `MCO_EDITION`; `mco edition` prints
+  the feature matrix.
+- **Context Exchange**: structured handoffs ({summary, decisions, files,
+  gotchas, follow_ups}) stored verbatim and weighted above mined context;
+  workflow runs stamp every step, and workers inject the whole predecessor
+  thread deterministically - cross-vendor continuity.
+- **Web Control Panel** at `/dashboard`: lock screen, agent
+  register/rotate/edit/delete with tokens shown exactly once, workflow
+  YAML submission, server-driven settings (governance, Drumline, presence,
+  tenancy, edition, security, notifications), connector health/sync,
+  retry on failed jobs, MCP/worker connect instructions per token.
+- **Agent presence health checks**: polling is the heartbeat; agents
+  silent past `MCO_AGENT_OFFLINE_AFTER` (default 300 s) report offline with
+  "seen Xm ago" in both the dashboard and `mco agents`.
+- **Org allowlist** (`MCO_ORGS`): tenants are minted deliberately in
+  Settings, never implicitly by a typo at registration.
+- **Agent SDK** (`mco.sdk.BatonAgent`): a worker in fifteen lines with
+  atomic leasing, thread-aware prompts, structured handoffs, and
+  governance-correct failure reporting.
+- **Air-gapped install**: `make-offline-bundle` scripts produce a
+  repo+wheels archive; installers auto-detect `offline/wheels` and install
+  with `--no-index`.
+- **Lifecycle commands**: `mco start` (detached background gateway with
+  health-checked startup), `mco restart`, `mco doctor` (end-to-end install
+  diagnosis), `mco --version`.
+- One-command installers (`curl | bash`, `iwr | iex`) with existing-install
+  detection; Hermes-style install UX on the website and README.
+- SECURITY.md, CodeQL, dependabot, release pipeline (PyPI + GHCR).
+
+### Fixed
+- Setup can no longer orphan the secret store (key is persisted before the
+  store is created); locked-store warnings are single and actionable.
+- `mco stop` no longer crashes (psutil was missing from dependencies).
+- WebSocket honors `MCO_LOCAL_TOKEN` parity with HTTP auth; the worker's
+  raw shell executor is opt-in (`MCO_ENABLE_SHELL_EXECUTOR`).
+- Web agent list shows all orgs to the host operator (parity with
+  `mco agents`).
+
+### Changed
+- Distribution renamed `mco` -> `batoncadence` (the CLI is still `mco`).
+- Config home is global (`~/.mco/.env`): `mco` behaves the same from any
+  directory.
+
+## [0.1.0] - 2026-06-10
+
+Initial MVP: job board with atomic leasing, multi-vendor executors
+(claude/codex/gemini), approval gates, immutable audit trail, escalation,
+DAG workflows, Drumline shared context, MCP server, ServiceNow/Dynatrace
+connectors, embedded LocalStore, dashboard, 151-test suite.

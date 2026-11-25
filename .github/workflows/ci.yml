@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: pip install -e .[dev]
+      - name: Test
+        run: pytest tests/ -q
+      - name: Wiki command and screen coverage
+        run: |
+          # The recorded CLI inventory reads Click parameter metadata that Typer 0.29
+          # builds lazily; check it against the Typer series it was recorded with.
+          pip install "typer>=0.26,<0.27"
+          python docs/wiki/_review/verify_cli_coverage.py --repo .
+          python docs/wiki/_review/verify_gui_coverage.py --repo . --strict-hashes
+          python scripts/build_wiki.py
+
+  neutrality:
+    # New lines must not carry private deployment details (ADR 0004 invariant 13). Generic patterns only in CI;
+    # each deployment also keeps a private denylist that the same script reads locally.
+    # Required check: runs on every push and pull request over the whole tracked tree.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Neutrality check (entire tree)
+        run: python scripts/check_neutrality.py --all
+      - name: Neutrality check (added lines only)
+        if: github.event_name == 'pull_request'
+        run: python scripts/check_neutrality.py --diff "origin/${{ github.base_ref }}"
+
+  console:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Console sources round-trip
+        run: python scripts/build_console.py verify
+
+  phone-layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install browser verification dependencies
+        run: |
+          pip install -e .[dev] playwright
+          python -m playwright install --with-deps chromium
+      - name: Verify phone Job Board readability and interactions
+        run: python scripts/check_job_board_phone.py
+      - name: Verify remaining phone screens and dialogs
+        run: |
+          python scripts/check_shell_phone.py
+          python scripts/check_setup_phone.py
+          python scripts/check_content_phone.py
+          python scripts/check_dashboard_phone.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: phone-readability-and-usability
+          path: output/playwright/
+          retention-days: 14
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build image
+        run: docker build -t mcorchestr8:ci .
+
+  install-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install via advertised script
+        run: bash scripts/install.sh --no-prompt
+      - name: Start gateway and wait (first /healthz 500 is warmup)
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          mco start
+          # Uvicorn can print "running" while /healthz and /console still 500
+          # for ~10s (asyncio backend import). Retry; do not treat first 500 as death.
+          wait_ok() {
+            local url="$1"
+            local i code
+            for i in $(seq 1 30); do
+              code=$(curl -sS -o /dev/null -w '%{http_code}' "$url" || echo 000)
+              if [ "$code" = "200" ]; then
+                echo "$url -> 200"
+                return 0
+              fi
+              echo "$url -> $code (waiting)"
+              sleep 1
+            done
+            echo "$url never reached 200"
+            return 1
+          }
+          wait_ok http://127.0.0.1:18789/healthz
+          wait_ok http://127.0.0.1:18789/console
+      - name: doctor
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          mco doctor

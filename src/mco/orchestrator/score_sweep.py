@@ -1,0 +1,379 @@
+"""The conductor sweep: score runs advance without a person typing a tick.
+
+C02 gave the conductor a working `tick()` - plan, dispatch, poll - and
+`run_until_settled()`. Nothing called either one. The canary run that went end
+to end got there because a terminal drove it, which means a run only progresses
+while someone is watching it. This module is the missing caller: one sweep
+advances every run the gateway is entitled to advance by exactly one tick, and
+`health.py` repeats it on a timer the same way it repeats the delivery watchdog.
+
+Three rules shape it, and each is the reason for a specific line below:
+
+  * **Only our runs.** A run records the credential hash of the conductor that
+    started it, and `ScoreBridge.identity` refuses to advance a run under any
+    other credential - by raising, which a *typed* `tick()` turns into a durable
+    block. So a sweep that ticked indiscriminately would not merely fail on a
+    CLI-owned run, it would kill it. Runs bound to another credential are
+    skipped, never touched - and because the credential can change between the
+    scan below and either identity check inside a tick, the sweep also ticks
+    with `block_on_identity_change=False`, so losing that race is a skip too.
+  * **Only unsettled runs.** Accepted, blocked, failed and completed runs are
+    finished, and a launched run has done what it was asked to do. The sweep
+    filters them out before ticking rather than relying on the bridge's internal
+    `status != 'running'` early-returns.
+  * **One bad run is one bad run.** Every run is ticked inside its own
+    try/except so a poisoned run cannot stop the ones behind it in the sweep.
+    `Exception` is deliberate: `asyncio.CancelledError` is a `BaseException` and
+    must travel straight out, so gateway shutdown stops the sweep at once.
+
+Off unless configured. `MCO_SCORE_SWEEP_SECONDS` defaults to 0, so upgrading a
+gateway never silently starts driving score runs.
+"""
+
+from __future__ import annotations
+
+import logging
+import json
+import os
+import tempfile
+from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+from mco.config import get_config
+from mco.orchestrator.score_conductor import TERMINAL_RUN_STATES
+from mco.orchestrator.scores import ScoreIdentityError
+
+logger = logging.getLogger("mco.orchestrator.score_sweep")
+
+DEFAULT_SWEEP_SECONDS = 0
+# These mirror `mco score --db` / `--artifact-root` (cli.DEFAULT_SCORE_DB and
+# cli.DEFAULT_SCORE_ROOT). A gateway that swept a different database than the
+# terminal writes to would report an empty board while runs sat untouched, so
+# tests/test_score_sweep.py asserts the two stay equal.
+DEFAULT_SCORE_DB = Path.home() / ".mco" / "score-runs.db"
+DEFAULT_SCORE_ROOT = Path.home() / ".mco" / "score-artifacts"
+PAUSE_STATE_FILENAME = "autonomy-pause.json"
+
+# Why a run was passed over. Anything here means "left exactly as it was".
+SKIP_OTHER_CREDENTIAL = "other_credential"
+SKIP_LAUNCHED = "launched"
+
+# Terminal states that mean a run is stuck rather than finished. Readiness has
+# to keep naming these; see `failing_runs`.
+FAILING_RUN_STATES = ("blocked", "failed")
+
+
+def get_sweep_seconds(config: Optional[dict] = None) -> int:
+    """Seconds between conductor sweeps (``MCO_SCORE_SWEEP_SECONDS``).
+
+    0 or negative disables the sweep, and that is the default: an existing
+    gateway must not start advancing score runs merely because it was upgraded.
+    """
+    config = config if config is not None else get_config()
+    try:
+        return int(config.get("MCO_SCORE_SWEEP_SECONDS") or DEFAULT_SWEEP_SECONDS)
+    except (TypeError, ValueError):
+        return DEFAULT_SWEEP_SECONDS
+
+
+def get_database(config: Optional[dict] = None) -> Path:
+    """Conductor state (``MCO_SCORE_DB``); the same SQLite file `mco score` uses."""
+    config = config if config is not None else get_config()
+    return Path(config.get("MCO_SCORE_DB") or DEFAULT_SCORE_DB)
+
+
+def get_artifact_root(config: Optional[dict] = None) -> Path:
+    """Evidence root (``MCO_SCORE_ARTIFACT_ROOT``); a run is bound to the root it started under."""
+    config = config if config is not None else get_config()
+    return Path(config.get("MCO_SCORE_ARTIFACT_ROOT") or DEFAULT_SCORE_ROOT)
+
+
+@dataclass
+class SweepResult:
+    """What one sweep did. Empty everywhere means nothing needed the gateway."""
+
+    ticked: list[str] = field(default_factory=list)
+    advanced: list[str] = field(default_factory=list)
+    blocked: dict[str, str] = field(default_factory=dict)
+    skipped: dict[str, str] = field(default_factory=dict)
+    errors: dict[str, str] = field(default_factory=dict)
+    # Every run that is stuck right now, not only the ones this pass touched.
+    # `blocked` is what this pass did; `failing` is what is still true.
+    failing: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def quiet(self) -> bool:
+        return not (self.advanced or self.blocked or self.errors)
+
+    def describe(self) -> str:
+        parts = [f"ticked={len(self.ticked)}"]
+        for name, value in (("advanced", self.advanced), ("blocked", self.blocked),
+                            ("skipped", self.skipped), ("errors", self.errors)):
+            if value:
+                parts.append(f"{name}={len(value)}")
+        return " ".join(parts)
+
+
+def candidates(bridge) -> list[tuple[str, str, str]]:
+    """(run_id, status, credential_hash) for every run that is not already terminal.
+
+    Ordered by id so two gateways sweep in the same sequence and a failing run
+    cannot change which runs the rest of the sweep reaches.
+    """
+    terminal = sorted(TERMINAL_RUN_STATES)
+    placeholders = ",".join("?" for _ in terminal)
+    with bridge.tx() as db:
+        return [(row["id"], row["status"], row["credential_hash"]) for row in db.execute(
+            f"SELECT id,status,credential_hash FROM runs WHERE status NOT IN ({placeholders}) ORDER BY id",
+            tuple(terminal))]
+
+
+def failing_runs(bridge) -> dict[str, str]:
+    """{run_id: status} for every run that is durably stuck, read fresh each pass.
+
+    Blocked and failed are terminal, so the pass *after* the one that blocks a
+    run never sees that run again - `candidates` filters it out. Readiness built
+    from what a single pass happened to notice therefore went quiet at exactly
+    the moment the failure became permanent, which is the moment somebody needed
+    to be told. Reading the runs table instead means a stuck run keeps being
+    named until something actually moves it, and that a gateway restart does not
+    amnesty the failures it inherited.
+    """
+    placeholders = ",".join("?" for _ in FAILING_RUN_STATES)
+    with bridge.tx() as db:
+        return {row["id"]: row["status"] for row in db.execute(
+            f"SELECT id,status FROM runs WHERE status IN ({placeholders}) ORDER BY id",
+            FAILING_RUN_STATES)}
+
+
+FAILING_ALERTS_FILENAME = "failing-alerts.json"
+
+
+def _alert_id(run_id: str) -> str:
+    # ntfy bodies carry only an 8-character id; run ids share a long prefix
+    # ("bitcadence-redesign-2026...") but differ at the end.
+    clean = "".join(ch for ch in str(run_id) if ch.isalnum())
+    return clean[-8:] or "unknown"
+
+
+def alert_new_failures(failing: dict[str, str], config: Optional[dict] = None, notify=None) -> list[str]:
+    """Push once when a run becomes blocked or failed; return the runs pushed.
+
+    A blocked run is terminal and silent: redesign run -05 sat blocked for hours
+    on 2026-10-08 before anyone looked (incident #30). The runs already alerted
+    are kept next to the pause state so a gateway restart does not re-push them.
+    With no file yet, today's failures are recorded silently - turning the alert
+    on must not replay every old stuck run.
+    """
+    path = get_artifact_root(config) / FAILING_ALERTS_FILENAME
+    try:
+        seen = set(json.loads(path.read_text(encoding="utf-8")).get("alerted", []))
+        first = False
+    except FileNotFoundError:
+        seen, first = set(), True
+    except (OSError, ValueError, TypeError, AttributeError) as exc:
+        logger.warning("Unable to read score failure alert state (%s)", type(exc).__name__)
+        seen, first = set(), True
+    current = {run_id for run_id in failing if not str(run_id).startswith("_")}
+    if first and not current:
+        # Nothing to seed from. Writing [] here would make the next pass treat
+        # every old stuck run as new (the 20-alert replay of 2026-10-08).
+        return []
+    fresh = [] if first else sorted(current - seen)
+    if notify is None:
+        from mco.notifiers.ntfy import notify_event
+        notify = notify_event
+    pushed = []
+    for run_id in fresh:
+        try:
+            notify("alert", _alert_id(run_id), project=str(run_id).split("-", 1)[0])
+            pushed.append(run_id)
+        except Exception as exc:  # noqa: BLE001 - an alert must never stop the sweep
+            logger.warning("Score failure alert for %s failed (%s)", run_id, type(exc).__name__)
+    # Forget runs that recovered or were cleared so a later failure alerts again.
+    keep = sorted((seen & current) | set(pushed) | (current if first else set()))
+    if first or keep != sorted(seen):
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"alerted": keep}), encoding="utf-8")
+        except OSError as exc:
+            logger.warning("Unable to write score failure alert state (%s)", type(exc).__name__)
+    for run_id in pushed:
+        logger.warning("Score run %s is stuck; owner alert sent", run_id)
+    return pushed
+
+
+_sweep_paused: bool = False
+
+
+def _pause_state_path(config: Optional[dict] = None) -> Path:
+    return get_artifact_root(config) / PAUSE_STATE_FILENAME
+
+
+def _read_pause_state(config: Optional[dict] = None) -> dict | None:
+    path = _pause_state_path(config)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            state = json.load(handle)
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        logger.warning("Unable to read score sweep pause state (%s)", type(exc).__name__)
+        return None
+    if not isinstance(state, dict):
+        logger.warning("Invalid score sweep pause state: expected a JSON object")
+        return None
+    return state
+
+
+def _write_pause_state(state: dict, config: Optional[dict] = None) -> None:
+    path = _pause_state_path(config)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.",
+            suffix=".tmp", delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            json.dump(state, handle, sort_keys=True)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
+
+
+def is_sweep_paused() -> bool:
+    """Whether autonomous conductor sweep execution has been paused by an operator."""
+    state = _read_pause_state()
+    if state is not None:
+        return state.get("paused") is True
+    # Missing or unreadable durable state normally means "not paused" after a
+    # process restart, because the module default is False.  While the process
+    # is still alive, however, retain the last operator decision in memory so a
+    # deleted/corrupt file cannot silently release the autonomy brake.
+    return _sweep_paused
+
+
+def set_sweep_paused(paused: bool, paused_by: Optional[str] = None) -> bool:
+    """Pause or unpause autonomous conductor sweeps."""
+    global _sweep_paused
+    _sweep_paused = bool(paused)
+    if _sweep_paused:
+        state = {
+            "paused": True,
+            "paused_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if paused_by:
+            state["paused_by"] = paused_by
+        _write_pause_state(state)
+    else:
+        path = _pause_state_path()
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            logger.warning("Unable to clear score sweep pause state (%s)", type(exc).__name__)
+    return _sweep_paused
+
+
+def sweep(conductor, *, force: bool = False) -> SweepResult:
+    """Advance every run this conductor owns and is allowed to move, by one tick."""
+    result = SweepResult()
+    from mco.killswitch import stop_active
+
+    if stop_active():
+        # Global kill switch beats force: nothing new moves while it is set.
+        result.skipped["_all"] = "kill_switch"
+        return result
+    if is_sweep_paused() and not force:
+        result.skipped["_all"] = "sweep_paused"
+        return result
+    for run_id, _status, credential in candidates(conductor.bridge):
+        try:
+            if credential != conductor.board.identity:
+                # Another conductor's run. Ticking it would raise "Conductor
+                # credential changed" and durably block work that is perfectly
+                # healthy, so the sweep does not go near it.
+                result.skipped[run_id] = SKIP_OTHER_CREDENTIAL
+                continue
+            # Re-read rather than trusting the row above: a terminal session or a
+            # second gateway may have settled this run since the candidate scan.
+            status = conductor.status(run_id)
+            if status["status"] in TERMINAL_RUN_STATES:
+                result.skipped[run_id] = status["status"]
+                continue
+            if status["launched"]:
+                result.skipped[run_id] = SKIP_LAUNCHED
+                continue
+            # `block_on_identity_change=False` is the whole fail-safe: the
+            # comparison above is a snapshot, and the credential can still move
+            # between it and the identity checks inside dispatch and poll. A
+            # tick that blocked on those would turn losing that race into a dead
+            # run, so an identity change raises out here and becomes a skip.
+            outcome = conductor.tick(run_id, block_on_identity_change=False)
+            result.ticked.append(run_id)
+            if outcome.error:
+                # tick() already blocked the run durably and wrote the
+                # tick_blocked/validation_blocked event. Report it once; do not
+                # block or re-event it here.
+                result.blocked[run_id] = outcome.error
+                logger.warning("Conductor sweep: run %s blocked - %s", run_id, outcome.error)
+            elif not outcome.idle:
+                result.advanced.append(run_id)
+                logger.info("Conductor sweep advanced %s", outcome.describe())
+        except ScoreIdentityError:
+            # The credential moved under us mid-tick. Whatever the tick had
+            # already committed is a whole, idempotent step - the run is still
+            # running, still ownable, still exactly as advanceable as it was -
+            # and the thing that matters is what did *not* happen: it was not
+            # blocked. Reported as the same skip as a run that belonged to
+            # somebody else before the sweep even started.
+            result.skipped[run_id] = SKIP_OTHER_CREDENTIAL
+        except Exception as exc:  # noqa: BLE001 - one run must not end the sweep
+            result.errors[run_id] = f"{type(exc).__name__}: {exc}"
+            logger.exception("Conductor sweep failed on run %s", run_id)
+    # Durable truth first, then what this pass saw for itself: a block the
+    # database somehow did not take, and the transient explosions that no runs
+    # table records because they never reached one.
+    result.failing = {**failing_runs(conductor.bridge), **result.blocked, **result.errors}
+    return result
+
+
+def open_conductor(config: Optional[dict] = None):
+    """The gateway's own conductor: configured state, board authenticated as us.
+
+    Deliberately not called when the sweep is disabled - opening the bridge
+    creates the SQLite file and the artifact root, and a disabled feature must
+    leave no trace on disk.
+    """
+    from mco.orchestrator.client import GatewayClient
+    from mco.orchestrator.score_conductor import configured_conductor
+
+    config = config if config is not None else get_config()
+    token = config.get("MCO_AGENT_TOKEN") or config.get("MCO_LOCAL_TOKEN") or None
+    if not token:
+        raise RuntimeError(
+            "The conductor sweep needs MCO_AGENT_TOKEN or MCO_LOCAL_TOKEN: a score run is "
+            "bound to the credential that started it, and an unauthenticated board cannot "
+            "advance one.")
+    client = GatewayClient(
+        base_url=config.get("MCO_GATEWAY_URL") or None,
+        token=token,
+        role=config.get("AGENT_ROLE") or None,
+        instance_id=config.get("AGENT_INSTANCE_ID") or None,
+    )
+    # Off by default, matching CLI --live-repository-write. Never infer this
+    # authority from a task supplied by an agent or from a nonempty string.
+    setting = config.get("MCO_SCORE_LIVE_REPOSITORY_WRITE", "false")
+    if not isinstance(setting, (str, bool)) or str(setting).lower() not in ("true", "false", ""):
+        raise ValueError("MCO_SCORE_LIVE_REPOSITORY_WRITE must be true or false")
+    return configured_conductor(
+        get_database(config), get_artifact_root(config), client,
+        live_repository_write=str(setting).lower() == "true",
+    )
