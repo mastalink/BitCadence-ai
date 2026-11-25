@@ -156,7 +156,8 @@
 
   async function pollOnce(version) {
     try {
-      const [j, a] = await Promise.all([api("/api/jobs?limit=200"), api("/api/agents"), refreshApprovals(version)]);
+      // The server pages storage; use the same complete list as mco_jobs.
+      const [j, a] = await Promise.all([api("/api/jobs"), api("/api/agents"), refreshApprovals(version)]);
       if (version !== connectionVersion) return;
       const normalized = (j || []).map(withWorkflow);
       const seenBefore = Object.keys(prevStatus).length > 0;
@@ -443,6 +444,13 @@
         await refreshProjectView(true);
         toast("ok", name ? "Project assigned" : "Project cleared", name || "The job is now unassigned.");
       } catch (e) { toast("err", "Project assignment failed", e.message); throw e; }
+    },
+    async cancelStale(dryRun = true, previewId = null) {
+      try {
+        const result = await api("/api/jobs/cancel-stale", {method: "POST", body: JSON.stringify({dry_run: dryRun, preview_id: previewId})});
+        if (!dryRun) await poll();
+        return result;
+      } catch (e) { toast("err", "Stale cleanup failed", e.message); throw e; }
     },
     async batchAction(action, jobIds, extra = {}) {
       if (connState === "demo") {

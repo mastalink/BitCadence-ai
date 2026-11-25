@@ -57,15 +57,15 @@ def test_live_stages_include_undispatched_tasks_and_explicit_review_loops():
     assert result[1]['cards'] == []
 
 
-def test_production_shell_opens_live_score_and_bounded_adapter():
+def test_production_shell_opens_live_score_and_full_job_board():
     shell = (ROOT / 'src/mco/console_src/8ec84a72-7b37-434d-a68b-2ac1188e3e6d.js').read_text(encoding='utf-8')
     source = VIEWS.read_text(encoding='utf-8')
     adapter = (ROOT / 'src/mco/console_src/47e66145-9c4d-41a1-acbb-42b12848f160.js').read_text(encoding='utf-8')
     assert 'overview: <Home' in shell
     assert 'scoreLive: <ScoreLive' in shell
     assert 'onWatch=' in shell and 'getScoreRun(runId)' in source
-    assert 'api("/api/jobs?limit=200")' in adapter
-    assert 'api("/api/jobs")' not in adapter
+    assert 'api("/api/jobs")' in adapter
+    assert 'api("/api/jobs?limit=200")' not in adapter
     assert '/api/score/autonomy/runs/' in adapter
     assert source.index('What needs you') < source.index("What's running")
 

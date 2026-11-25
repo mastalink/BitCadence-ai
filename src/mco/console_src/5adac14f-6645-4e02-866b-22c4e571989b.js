@@ -419,6 +419,18 @@ function JobBoard({ jobs, tone, advanced, onOpen, onCompose }) {
   const [reassignRole, setReassignRole] = useStateJ("");
   const [batchResult, setBatchResult] = useStateJ(() => (window.BitCadenceStore.getMutationResults?.() || [])[0] || null);
   const batchLock = useRefJ(false);
+  const [stalePreview, setStalePreview] = useStateJ(null);
+  const [staleError, setStaleError] = useStateJ("");
+  const cleanupStale = async (apply) => {
+    if (batchLock.current) return;
+    batchLock.current = true;
+    setBatchBusy(true); setStaleError("");
+    try {
+      const result = await window.BitCadenceStore.cancelStale(!apply, stalePreview && stalePreview.preview_id);
+      setStalePreview(apply ? null : result);
+    } catch (e) { setStaleError(e.message); }
+    finally { batchLock.current = false; setBatchBusy(false); }
+  };
 
   const setSort = (s) => {
     setSortState(s);
@@ -531,6 +543,7 @@ function JobBoard({ jobs, tone, advanced, onOpen, onCompose }) {
   return (
     <div className="bc-job-board">
       <div className="bc-job-controls" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <button disabled={batchBusy} onClick={() => cleanupStale(false)}>Preview stale jobs</button>
         <div className="bc-job-filters" style={{ display: "flex", gap: 2, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 3 }}>
           {JOB_FILTERS.map((f) => (
             <button key={f.id} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)} style={{
@@ -566,7 +579,7 @@ function JobBoard({ jobs, tone, advanced, onOpen, onCompose }) {
         <Btn kind="primary" onClick={onCompose}>+ New job</Btn>
       </div>
 
-      <p style={{ fontSize: 12, color: "var(--text-3)" }}>Showing {visible.length} of {jobs.length} loaded jobs, from the latest window of up to 200. Filters and counts apply only to this window; older or archived work may be absent.</p>
+      <p style={{ fontSize: 12, color: "var(--text-3)" }}>Showing {visible.length} of {jobs.length} unarchived jobs.</p>
 
       {batchResult ? <div role="status" aria-live="polite" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 14 }}>
         <b>Last {batchResult.action} result: {(batchResult.succeeded || []).length} succeeded, {Object.keys(batchResult.failed || {}).length} failed, {(batchResult.skipped || []).length} skipped.</b>
@@ -575,6 +588,14 @@ function JobBoard({ jobs, tone, advanced, onOpen, onCompose }) {
         {(batchResult.succeeded || []).length ? <ul>{batchResult.succeeded.map(id => <li key={id}>{id}: {batchResult.action === "reassign" ? <span>Replacement {batchResult.replacements?.[id] ? <button onClick={() => onOpen(batchResult.replacements[id])}>{batchResult.replacements[id]}</button> : <span>created; its ID could not be loaded. Open <button onClick={() => onOpen(id)}>original History</button> to inspect the replacement link.</span>}</span> : "succeeded"}</li>)}</ul> : null}
         {(batchResult.skipped || []).length ? <div>Skipped (hidden or ineligible): {batchResult.skipped.join(", ")}</div> : null}
       </div> : null}
+
+      {staleError ? <p role="alert">{staleError}</p> : null}
+      {stalePreview ? <Card>
+        <p>These {stalePreview.jobs.length} old jobs have never started. Review this list before stopping them. Active work is kept.</p>
+        <ul>{stalePreview.jobs.map(j => <li key={j.id}>{j.title || j.id} · {j.status} · {j.id}</li>)}</ul>
+        <Btn disabled={batchBusy || !stalePreview.jobs.length} onClick={() => cleanupStale(true)}>Cancel stale jobs</Btn>
+        <Btn disabled={batchBusy} onClick={() => setStalePreview(null)}>Keep these jobs</Btn>
+      </Card> : null}
 
       {selected.size > 0 ? (
         <div style={{
