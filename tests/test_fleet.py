@@ -315,12 +315,33 @@ exec = "codex-run.cmd"
     monkeypatch.setattr(fleet.service, "install_waker", lambda *a, **k: calls.append(("waker",)) or (True, ""))
     monkeypatch.setattr(fleet.service, "install_poll", lambda *a, **k: calls.append(("poll",)) or (True, ""))
     monkeypatch.setattr(fleet, "missing_agent_tokens", lambda workers: [])
+    from mco import cockpit
+    monkeypatch.setattr(cockpit, "load_cockpit", lambda *a, **k: cockpit.CockpitConfig())
+    monkeypatch.setattr(cockpit, "find_herdr", lambda configured=None: "herdr.exe")
 
     summaries = fleet.apply_fleet(config)
 
     assert ("waker",) not in calls and ("poll",) not in calls
     assert not installed
     assert any("worker-a: pane" in line for line in summaries)
+
+
+def test_pane_mode_without_herdr_is_refused_before_anything_is_uninstalled(tmp_path, monkeypatch):
+    """Pane mode removes the OS services; with no herdr the worker would have no runner at all."""
+    config = _write(tmp_path / "fleet.toml",
+                    '[workers.worker-a]\nrole = "codex"\ninstance = "worker-a"\nmode = "pane"\nexec = "run.cmd"\n')
+    calls = []
+    monkeypatch.setattr(fleet.service, "list_status",
+                        lambda: [{"name": "BitCadence-wake-codex-worker-a", "installed": True, "running": True}])
+    monkeypatch.setattr(fleet.service, "uninstall", lambda name: calls.append(name) or (True, ""))
+    monkeypatch.setattr(fleet, "missing_agent_tokens", lambda workers: [])
+    from mco import cockpit
+    monkeypatch.setattr(cockpit, "load_cockpit", lambda *a, **k: cockpit.CockpitConfig())
+    monkeypatch.setattr(cockpit, "find_herdr", lambda configured=None: None)
+
+    with pytest.raises(fleet.FleetConfigError, match="herdr is not installed"):
+        fleet.apply_fleet(config)
+    assert calls == []
 
 
 def test_pane_mode_requires_exec(tmp_path):

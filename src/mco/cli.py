@@ -1817,13 +1817,13 @@ def cockpit_read(
 ):
     """Print the recent output of a cockpit pane."""
     from mco import cockpit
-    h = cockpit.herdr_for(cockpit.load_cockpit())
     try:
+        h = cockpit.herdr_for(cockpit.load_cockpit())
         pane = h.find_pane(label)
         if not pane:
             _cockpit_fail(cockpit.HerdrError(f"no pane labelled {label!r}"))
         typer.echo(h.read(pane["pane_id"], lines))
-    except cockpit.HerdrError as exc:
+    except (cockpit.HerdrError, cockpit.CockpitConfigError) as exc:
         _cockpit_fail(exc)
 
 
@@ -1832,7 +1832,10 @@ def cockpit_attach():
     """Open the cockpit in this terminal (all workspaces, panes and agents)."""
     import subprocess as _sp
     from mco import cockpit
-    h = cockpit.herdr_for(cockpit.load_cockpit())
+    try:
+        h = cockpit.herdr_for(cockpit.load_cockpit())
+    except cockpit.CockpitConfigError as exc:
+        _cockpit_fail(exc)
     if not h.exe:
         _cockpit_fail(cockpit.HerdrError("herdr is not installed"))
     raise typer.Exit(code=_sp.call([h.exe, "--session", h.session]))

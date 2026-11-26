@@ -47,9 +47,16 @@ def load_panel(path: Path = PANEL_CONFIG_PATH) -> tuple[Reviewer, ...]:
     if not path.exists():
         return DEFAULT_PANEL
     with path.open("rb") as handle:
-        raw = tomllib.load(handle).get("reviewer", [])
+        try:
+            raw = tomllib.load(handle).get("reviewer", [])
+        except tomllib.TOMLDecodeError as exc:
+            raise ReviewFanoutError(f"Invalid TOML in {path}: {exc}") from exc
+    if not isinstance(raw, list):
+        raise ReviewFanoutError(f"{path}: [[reviewer]] must be an array of tables")
     panel = []
-    for i, r in enumerate(raw if isinstance(raw, list) else []):
+    for i, r in enumerate(raw):
+        if not isinstance(r, dict):
+            raise ReviewFanoutError(f"{path}: reviewer #{i + 1} must be a table")
         role, family = r.get("role"), r.get("family")
         if not (isinstance(role, str) and role and isinstance(family, str) and family):
             raise ReviewFanoutError(f"{path}: reviewer #{i + 1} needs role and family")

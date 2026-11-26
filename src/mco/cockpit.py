@@ -51,6 +51,9 @@ _DETACHED_PROCESS = 0x00000008
 ALLOWED_PANE_FIELDS = {"workspace", "label", "cwd", "command"}
 
 
+_UNSET: Any = object()   # Herdr(exe=...) not given -> discover; None -> resolved as missing
+
+
 class HerdrError(RuntimeError):
     """herdr is missing, its server will not start, or a command failed."""
 
@@ -83,7 +86,10 @@ def _no_window() -> dict[str, Any]:
 
 def find_herdr(configured: Optional[str] = None) -> Optional[str]:
     """``BITCADENCE_HERDR``, then ``herdr`` in cockpit.toml, then ``herdr`` on PATH. No machine-specific defaults:
-    where herdr lives is deployment configuration, not product code."""
+    where herdr lives is deployment configuration, not product code.
+
+    An explicitly pinned path that does not exist returns ``None`` on purpose (no fallback to PATH): running a
+    different herdr binary than the one the operator pinned is worse than a clear "not installed" error."""
     for candidate in (os.environ.get("BITCADENCE_HERDR"), configured):
         if candidate:
             path = os.path.expanduser(candidate)
@@ -98,19 +104,22 @@ def _default_runner(argv: Sequence[str]) -> "subprocess.CompletedProcess[str]":
 class Herdr:
     """One herdr named session, driven through its JSON CLI."""
 
-    def __init__(self, session: str = DEFAULT_SESSION, exe: Optional[str] = None,
+    def __init__(self, session: str = DEFAULT_SESSION, exe: Any = _UNSET,
                  runner: Optional[Runner] = None,
                  spawn: Optional[Callable[[Sequence[str]], Any]] = None):
         self.session = session
-        self.exe = exe or find_herdr()
+        # exe=None means "resolved, and not installed" (e.g. a pinned path that is missing): never re-resolve it
+        # to whatever herdr happens to be on PATH. Only an omitted exe triggers discovery.
+        self.exe = find_herdr() if exe is _UNSET else exe
         self._runner = runner or _default_runner
         self._spawn = spawn or self._spawn_hidden
 
     # -- plumbing --------------------------------------------------------------------------------------------
     def _argv(self, *args: str) -> list[str]:
         if not self.exe:
-            raise HerdrError("herdr is not installed. Get it from https://github.com/herdrdev/herdr/releases "
-                             "and put herdr.exe on PATH (or set BITCADENCE_HERDR).")
+            raise HerdrError("herdr is not installed (or the path pinned in BITCADENCE_HERDR / cockpit.toml "
+                             "`herdr` does not exist). Get it from https://github.com/herdrdev/herdr/releases "
+                             "and put herdr.exe on PATH (or fix the pinned path).")
         return [self.exe, "--session", self.session, *args]
 
     def call(self, *args: str) -> Any:
@@ -135,6 +144,8 @@ class Herdr:
 
     # -- server ----------------------------------------------------------------------------------------------
     def running(self) -> bool:
+        """Is the session's server up? Raises HerdrError when herdr itself is missing (not "not running")."""
+        self._argv()
         try:
             out = self.call("status", "server")
         except HerdrError:
@@ -180,6 +191,9 @@ class Herdr:
             pane_id = free_root
         else:
             existing = self.panes(ws_id)
+            if not existing:
+                raise HerdrError(f"workspace {workspace!r} ({ws_id}) has no panes to split; "
+                                 "close it in herdr and run again")
             # alternate split direction so a busy workspace stays a readable grid, not slivers
             direction = "down" if len(existing) % 2 else "right"
             args = ["pane", "split", existing[-1]["pane_id"], "--direction", direction, "--no-focus"]
@@ -234,10 +248,21 @@ def _has_child_process(pid: int) -> bool:
                         ("th32ParentProcessID", wintypes.DWORD), ("pcPriClassBase", ctypes.c_long),
                         ("dwFlags", wintypes.DWORD), ("szExeFile", ctypes.c_wchar * 260)]
 
-        k32 = ctypes.windll.kernel32
+        # A private WinDLL with explicit argtypes: on 64-bit Windows an untyped HANDLE argument is marshalled as a
+        # 32-bit int (OverflowError / truncated handle), and setting them on the shared ctypes.windll would leak
+        # into other modules.
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        lp_entry = ctypes.POINTER(PROCESSENTRY32W)
+        k32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
         k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        k32.Process32FirstW.argtypes = [wintypes.HANDLE, lp_entry]
+        k32.Process32FirstW.restype = wintypes.BOOL
+        k32.Process32NextW.argtypes = [wintypes.HANDLE, lp_entry]
+        k32.Process32NextW.restype = wintypes.BOOL
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        k32.CloseHandle.restype = wintypes.BOOL
         snap = k32.CreateToolhelp32Snapshot(0x00000002, 0)   # TH32CS_SNAPPROCESS
-        if snap in (None, wintypes.HANDLE(-1).value):
+        if snap in (None, 0, wintypes.HANDLE(-1).value):
             return False
         try:
             entry = PROCESSENTRY32W()
@@ -257,7 +282,14 @@ def _has_child_process(pid: int) -> bool:
 
 # -- the one function every job goes through ---------------------------------------------------------------
 def command_line(argv: Sequence[str]) -> str:
-    """Quote an argv for the pane's shell (PowerShell on Windows, POSIX sh elsewhere)."""
+    """Quote an argv for the pane's shell (PowerShell on Windows, POSIX sh elsewhere).
+
+    The line is typed into a PTY, so a CR/LF inside an argument would end the line there and run the rest as a
+    second command: refused, like an empty argv."""
+    if not argv:
+        raise HerdrError("empty command")
+    if any("\r" in str(a) or "\n" in str(a) for a in argv):
+        raise HerdrError("a command argument contains a line break; refusing to type it into a shell")
     if os.name == "nt":
         quoted = ["'" + str(a).replace("'", "''") + "'" for a in argv]
         return "& " + " ".join(quoted)
@@ -275,6 +307,8 @@ def run(label: str, command: str | Sequence[str], workspace: str = JOBS_WORKSPAC
     h = herdr or herdr_for(load_cockpit())
     h.ensure_server()
     text = command if isinstance(command, str) else command_line(command)
+    if not text.strip() or "\r" in text or "\n" in text:
+        raise HerdrError("a pane command must be one non-empty line")
     existing = h.find_pane(label)
     if existing:
         if not reuse:
@@ -305,6 +339,8 @@ def parse_cockpit_data(data: dict[str, Any]) -> CockpitConfig:
         for key in ("workspace", "label", "command"):
             if not isinstance(p.get(key), str) or not p[key].strip():
                 raise CockpitConfigError(f"pane #{i + 1} needs a non-empty {key}")
+        if "\r" in p["command"] or "\n" in p["command"]:
+            raise CockpitConfigError(f"pane #{i + 1} command must be a single line")
         if p["label"] in seen:
             raise CockpitConfigError(f"duplicate pane label {p['label']!r}")
         seen.add(p["label"])

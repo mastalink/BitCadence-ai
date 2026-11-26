@@ -141,6 +141,19 @@ def missing_agent_tokens(workers: dict[str, Any]) -> list[str]:
 
 def apply_fleet(path: Path = FLEET_CONFIG_PATH) -> list[str]:
     workers = load_fleet(path)
+    pane_workers = sorted(w.worker for w in workers.values() if w.mode == "pane")
+    if pane_workers:
+        # mode = "pane" removes the worker's OS services, so a missing herdr would leave it with no runner at all.
+        # Refuse before anything is uninstalled.
+        from mco import cockpit
+        try:
+            herdr_path = cockpit.find_herdr(cockpit.load_cockpit().herdr)
+        except cockpit.CockpitConfigError as exc:
+            raise FleetConfigError(f"mode=pane needs a valid cockpit.toml: {exc}") from exc
+        if not herdr_path:
+            raise FleetConfigError(
+                f"mode=pane for {', '.join(pane_workers)} but herdr is not installed (or its pinned path is "
+                "missing); nothing was changed. Install herdr, or set those workers back to waker or poll.")
     installed = _installed_worker_service_names()
     summaries: list[str] = []
 

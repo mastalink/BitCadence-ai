@@ -44,7 +44,10 @@ specific worker instances in its private `~/.mco/review_panel.toml`.
 
 * The runtime (agentd-based) remains the **supervisor** for hidden processes: restart backoff, crash loops, logs.
 * `mode = "pane"` is the **visible** host. Its restart policy comes from the runtime, not from herdr.
-* If herdr is absent or unhealthy, pane-hosted processes fall back to hidden hosting.
+* `fleet apply` refuses `mode = "pane"` when herdr is not installed (or its pinned path is missing) and changes
+  nothing, because pane mode removes the worker's OS services. An explicitly pinned herdr path that is missing is
+  an error, never a silent fallback to another herdr on PATH. Automatic fallback to hidden hosting when herdr is
+  unhealthy at run time belongs to the runtime (R0-02/R1-06), not to this package.
 
 ### Reboots: herdr restores layout, not processes
 

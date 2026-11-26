@@ -135,6 +135,86 @@ def test_missing_herdr_is_a_clear_error(monkeypatch):
         cockpit.Herdr().call("workspace", "list")
 
 
+def test_pinned_missing_herdr_never_falls_back_to_path(monkeypatch):
+    """A pinned herdr that is gone must not silently become a different herdr found on PATH."""
+    monkeypatch.delenv("BITCADENCE_HERDR", raising=False)
+    monkeypatch.setattr(cockpit.shutil, "which", lambda name: "C:/other/herdr.exe")
+    h = cockpit.herdr_for(cockpit.CockpitConfig(herdr="Z:/pinned/missing/herdr.exe"))
+    assert h.exe is None
+    with pytest.raises(cockpit.HerdrError, match="not installed"):
+        h.call("workspace", "list")
+    assert cockpit.Herdr().exe == "C:/other/herdr.exe"   # nothing pinned: PATH discovery still works
+
+
+def test_status_reports_missing_herdr_instead_of_all_panes_stopped(tmp_path):
+    cfg = _write(tmp_path / "cockpit.toml", '[[pane]]\nworkspace = "w"\nlabel = "a"\ncommand = "echo a"\n')
+    with pytest.raises(cockpit.HerdrError, match="not installed"):
+        cockpit.status(cfg, fleet_path=tmp_path / "none.toml", herdr=cockpit.Herdr(exe=None))
+
+
+def test_command_line_refuses_empty_and_line_breaks():
+    with pytest.raises(cockpit.HerdrError, match="empty"):
+        cockpit.command_line([])
+    for bad in ("a\nRemove-Item x", "a\rb"):
+        with pytest.raises(cockpit.HerdrError, match="line break"):
+            cockpit.command_line(["python", bad])
+    with pytest.raises(cockpit.HerdrError, match="one non-empty line"):
+        cockpit.run("job", "echo 1\necho 2", herdr=FakeHerdr().client())
+
+
+def test_config_refuses_multi_line_pane_command():
+    with pytest.raises(cockpit.CockpitConfigError, match="single line"):
+        cockpit.parse_cockpit_data({"pane": [{"workspace": "w", "label": "a", "command": "echo 1\necho 2"}]})
+
+
+def test_new_pane_in_workspace_with_no_panes_is_a_clear_error():
+    fake = FakeHerdr()
+    fake.workspaces.append({"workspace_id": "w9", "label": "jobs"})
+    with pytest.raises(cockpit.HerdrError, match="no panes"):
+        fake.client().new_pane("jobs", "x")
+
+
+def test_real_spawn_and_runner_pass_no_window_flags_on_windows(monkeypatch):
+    """The console pop-up rule: the real spawn/run paths must ask Windows for no console window."""
+    seen = {}
+
+    class FakePopen:
+        def __init__(self, argv, **kwargs):
+            seen["popen"] = kwargs
+
+    def fake_run(argv, **kwargs):
+        seen["run"] = kwargs
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(cockpit.os, "name", "nt")
+    monkeypatch.setattr(cockpit.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(cockpit.subprocess, "run", fake_run)
+    cockpit.Herdr._spawn_hidden(["herdr.exe", "server"])
+    cockpit._default_runner(["herdr.exe", "status", "server"])
+    assert seen["popen"]["creationflags"] & 0x08000000 and seen["popen"]["creationflags"] & 0x00000008
+    assert seen["popen"]["stdin"] is subprocess.DEVNULL and seen["popen"]["stdout"] is subprocess.DEVNULL
+    assert seen["run"]["creationflags"] & 0x08000000
+
+
+@pytest.mark.skipif(cockpit.os.name != "nt", reason="Toolhelp32 path is Windows-only")
+def test_has_child_process_real_toolhelp32(monkeypatch):
+    monkeypatch.undo()   # the autouse fixture stubs _has_child_process; exercise the real one here
+    child = subprocess.Popen([__import__("sys").executable, "-c", "import time; time.sleep(5)"],
+                             creationflags=0x08000000)
+    try:
+        assert cockpit._has_child_process(cockpit.os.getpid()) is True
+    finally:
+        child.kill()
+        child.wait()
+    lone = subprocess.Popen([__import__("sys").executable, "-c", "import time; time.sleep(5)"],
+                            creationflags=0x08000000)
+    try:
+        assert cockpit._has_child_process(lone.pid) is False
+    finally:
+        lone.kill()
+        lone.wait()
+
+
 def test_up_starts_declared_panes_once(tmp_path):
     cfg = _write(tmp_path / "cockpit.toml", """
 [[pane]]

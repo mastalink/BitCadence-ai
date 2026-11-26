@@ -64,5 +64,19 @@ def test_load_panel_reads_deployment_config(tmp_path):
     assert fresh.load_panel(tmp_path / "missing.toml") == fresh.DEFAULT_PANEL
 
 
+@pytest.mark.parametrize("text, match", [
+    ("[[reviewer]\nrole = ", "Invalid TOML"),
+    ('reviewer = "codex"\n', "array of tables"),
+    ("reviewer = [1, 2]\n", "must be a table"),
+])
+def test_load_panel_rejects_bad_config_clearly(tmp_path, text, match):
+    cfg = tmp_path / "review_panel.toml"
+    cfg.write_text(text, encoding="utf-8")
+    import importlib
+    fresh = importlib.reload(reviews)
+    with pytest.raises(fresh.ReviewFanoutError, match=match):
+        fresh.load_panel(cfg)
+
+
 def test_default_panel_names_no_instances():
     assert all(r.instance is None for r in reviews.DEFAULT_PANEL)
