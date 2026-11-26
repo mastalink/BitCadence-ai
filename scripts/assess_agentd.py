@@ -115,14 +115,28 @@ def grandchild_pid(logs, worker: str, timeout: float = 10) -> int | None:
 
 
 def check_no_window_and_stop_tree(home: Path) -> None:
+    import threading
     sup, logs = make_supervisor(home, {"tree": CHILD_WITH_GRANDCHILD})
     before = visible_windows()
-    sup.reconcile({"tree": cfg("tree")})
-    gpid = grandchild_pid(logs, "tree")
-    new = set()
-    for _ in range(10):
-        time.sleep(0.3)
-        new |= visible_windows() - before
+    new: set = set()
+    done = threading.Event()
+
+    def sample() -> None:
+        # Sample continuously from before the spawn: a console that flashes open and shut during child or
+        # grandchild start-up would be missed by sampling only after both have started.
+        while not done.is_set():
+            new.update(visible_windows() - before)
+            time.sleep(0.05)
+
+    sampler = threading.Thread(target=sample, daemon=True)
+    sampler.start()
+    try:
+        sup.reconcile({"tree": cfg("tree")})
+        gpid = grandchild_pid(logs, "tree")
+        time.sleep(3)
+    finally:
+        done.set()
+        sampler.join(5)
     record("no-window", "children and grandchildren never show a window",
            "PASS" if not new and gpid else ("GAP" if new else "SKIP"),
            f"new visible windows: {sorted(c for _, c in new) or 'none'}; grandchild pid {gpid}")
@@ -157,20 +171,24 @@ def check_supervisor_death(home: Path, src: str) -> None:
     pidfile = home / ".mco" / "host.pids"
     code = HOST.format(src=src, pidfile=str(pidfile), py=PY, code=CHILD_WITH_GRANDCHILD, cwd=str(home))
     host = subprocess.Popen([PY, "-c", code], stdout=subprocess.PIPE, creationflags=0x08000000)
-    info = json.loads(host.stdout.readline().decode())
-    child = info["child"]
-    gpid = int(info["line"].split()[-1])
-    host.kill()                       # hard death: no shutdown code runs
-    host.wait(5)
+    try:
+        info = json.loads(host.stdout.readline().decode())
+        child = info["child"]
+        gpid = int(info["line"].split()[-1])
+    finally:
+        host.kill()                   # hard death: no shutdown code runs (also on a setup failure)
+        host.wait(5)
     time.sleep(2)
     record("no-orphans-on-supervisor-death", "if the supervisor dies hard, its whole tree dies",
            "PASS" if not alive(child) and not alive(gpid) else "GAP",
            f"child {child} alive={alive(child)}; grandchild {gpid} alive={alive(gpid)}")
     from mco.agentd.platform.windows import WindowsAdapter
     reaped = WindowsAdapter(pidfile=pidfile).reap_orphans(pidfile)
+    leftover = pidfile.read_text(encoding="utf-8").strip() if pidfile.exists() else ""
+    # PASS only if the Job Object already killed everything: anything reap_orphans had to kill was a leak.
     record("restart-no-stale", "a restarted supervisor finds nothing stale to adopt or leak",
-           "PASS" if not pidfile.read_text(encoding="utf-8").strip() else "GAP",
-           f"reaped {reaped}; pidfile cleared")
+           "PASS" if not reaped and not leftover else "GAP",
+           f"reaped {reaped or 'nothing'}; pidfile {'cleared' if not leftover else 'NOT cleared'}")
 
 
 def check_reap_identity(home: Path) -> None:
@@ -184,10 +202,11 @@ def check_reap_identity(home: Path) -> None:
     survived = bystander.poll() is None
     record("reap-identity", "orphan reaping never kills an unrelated process that reused a recorded pid",
            "PASS" if survived else "GAP",
-           f"bystander {bystander.pid} {'survived' if survived else 'was KILLED'} (reaped {killed}); "
-           "records hold exe name only, no create time")
+           f"bystander {bystander.pid} {'survived' if survived else 'was KILLED'} (reaped {killed})"
+           + ("" if survived else "; records hold exe name only, no create time"))
     if survived:
         bystander.kill()
+    bystander.wait(5)
 
 
 def check_crash_loop(home: Path) -> None:
@@ -203,9 +222,22 @@ def check_crash_loop(home: Path) -> None:
         if sup.workers["crash"].state == WorkerState.CRASHLOOPED:
             break
     st = sup.workers["crash"]
+    latched = st.state == WorkerState.CRASHLOOPED
     record("crash-loop", "a worker that keeps dying is latched as crash-looped and stops restarting",
-           "PASS" if st.state == WorkerState.CRASHLOOPED else "GAP",
+           "PASS" if latched else "GAP",
            f"state={st.state.value} starts={st.starts} failures={len(st.failure_timestamps)}")
+    if latched:
+        from mco.agentd.supervisor import CRASHLOOP_COOLDOWN_SECONDS
+        last = max(st.failure_timestamps)
+        sup.wall_clock = lambda: last + CRASHLOOP_COOLDOWN_SECONDS - 5     # just before the cooldown ends
+        sup.tick()
+        held = st.state == WorkerState.CRASHLOOPED
+        sup.wall_clock = lambda: last + CRASHLOOP_COOLDOWN_SECONDS + 5     # just after
+        sup.tick()
+        left = st.state != WorkerState.CRASHLOOPED
+        record("crash-loop-cooldown", "after the cooldown a crash-looped worker gets a fresh set of attempts",
+               "PASS" if held and left else "GAP",
+               f"held before cooldown={held}; retried after={left} (state={st.state.value})")
     sup.shutdown()
 
 
@@ -218,15 +250,29 @@ def check_flood_and_rotation(home: Path) -> None:
         exited = True
     except Exception:
         exited = False
-    time.sleep(2)
     logdir = home / ".mco" / "logs"
-    sizes = {p.name: p.stat().st_size for p in logdir.glob("*.log*")}
+
+    def sizes_now() -> dict[str, int]:
+        return {p.name: p.stat().st_size for p in logdir.glob("*.log*")}
+
+    # The drain threads keep writing after the child exits: wait until the log stops growing (not a fixed sleep,
+    # which on slow disks inspects a half-written log and can report a false PASS).
+    sizes, stable_since, deadline = sizes_now(), time.time(), time.time() + 60
+    while time.time() < deadline and time.time() - stable_since < 1.5:
+        time.sleep(0.25)
+        now = sizes_now()
+        if now != sizes:
+            sizes, stable_since = now, time.time()
     biggest = max(sizes.values(), default=0)
+    total = sum(sizes.values())
     record("log-drain", "a child that floods its output never blocks", "PASS" if exited else "GAP",
            f"25 MB writer exited={exited}")
+    rotated = biggest <= 10 * 1024 * 1024 + 4096
+    drained = total >= 20 * 1024 * 1024     # most of the 25 MB arrived, so the size check means something
     record("log-rotation", "logs rotate at 10 MB x3 backups",
-           "PASS" if biggest <= 10 * 1024 * 1024 + 4096 else "GAP",
-           f"largest log {biggest / 1e6:.1f} MB; files {sorted(sizes)} (handler.stream.write bypasses rollover)")
+           "PASS" if rotated and drained else ("SKIP" if not drained else "GAP"),
+           f"largest log {biggest / 1e6:.1f} MB of {total / 1e6:.1f} MB drained; files {sorted(sizes)}"
+           + ("" if rotated else " (handler.stream.write bypasses rollover)"))
     sup.shutdown()
 
 
@@ -244,15 +290,21 @@ def check_graceful_then_kill(home: Path) -> None:
 
 
 def check_reconcile(home: Path) -> None:
-    sup, _ = make_supervisor(home, {"w": SLEEP})
-    sup.reconcile({"w": cfg("w", min_interval=10)})
-    first = sup.workers["w"].process.pid
-    sup.reconcile({"w": cfg("w", min_interval=20)})
-    second = sup.workers["w"].process.pid
-    sup.reconcile({"w": cfg("w", mode="off")})
+    sup, _ = make_supervisor(home, {"w": SLEEP, "v": SLEEP})
+    sup.reconcile({"w": cfg("w", min_interval=10), "v": cfg("v", min_interval=10)})
+    first, other = sup.workers["w"].process.pid, sup.workers["v"].process.pid
+    sup.reconcile({"w": cfg("w", min_interval=20), "v": cfg("v", min_interval=10)})   # only w changed
+    time.sleep(1)
+    second, other_after = sup.workers["w"].process.pid, sup.workers["v"].process.pid
+    restarted_changed = first != second and not alive(first)
+    kept_unchanged = other == other_after and alive(other)
+    sup.reconcile({"w": cfg("w", mode="off"), "v": cfg("v", min_interval=10)})
+    time.sleep(1)
+    off_stopped = not alive(second)
     record("reconcile", "config changes restart only what changed; mode=off stops",
-           "PASS" if first != second and not alive(second) else "GAP",
-           f"pid {first} -> {second}; off -> alive={alive(second)}")
+           "PASS" if restarted_changed and kept_unchanged and off_stopped else "GAP",
+           f"changed w: {first} -> {second} (old alive={alive(first)}); unchanged v: {other} -> {other_after}; "
+           f"w off -> alive={alive(second)}")
     sup.shutdown()
 
 
@@ -278,8 +330,9 @@ def check_generic_process_spec() -> None:
     except Exception:
         ok = False
     record("generic-processes", "can supervise non-worker processes (gateway, scheduler, plugin processes)",
-           "PASS" if ok else "GAP", "argv is derived only from worker modes waker/poll; gateway/plugins need a "
-           "generic process spec")
+           "PASS" if ok else "GAP",
+           "the supervisor accepts a non-waker/poll process spec" if ok else
+           "argv is derived only from worker modes waker/poll; gateway/plugins need a generic process spec")
 
 
 def main() -> int:
