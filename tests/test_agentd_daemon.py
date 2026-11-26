@@ -102,7 +102,10 @@ def running_pid(daemon: Daemon, name: str) -> int | None:
 def test_killed_worker_is_restarted_with_visible_backoff(running) -> None:
     daemon, _ = running
     first = wait_for(lambda: running_pid(daemon, "alpha"))
-    identity.kill_verified_tree(psutil.Process(first))
+    # Signal only. On POSIX this process is the worker's parent, so waiting on the
+    # pid here (kill_verified_tree does) would collect the exit status first and
+    # the supervisor would read a clean exit instead of a kill.
+    psutil.Process(first).kill()
 
     seen = wait_for(lambda: (worker(daemon, "alpha") or {}).get("state") == "backoff" and worker(daemon, "alpha"))
     assert seen["failures_in_window"] == 1 and seen["next_start_in_s"] is not None
@@ -221,7 +224,8 @@ def test_hard_killing_the_supervisor_leaves_no_orphaned_children(tmp_path: Path,
         assert all(psutil.pid_exists(pid) for pid in children)
 
         psutil.Process(daemon_pid).kill()  # no shutdown code runs
-        wait_for(lambda: not psutil.pid_exists(daemon_pid))
+        # We are its parent: on POSIX the pid exists (as a zombie) until we wait.
+        process.wait(timeout=20)
 
         successor = Daemon(adapter=make_adapter(state), fleet_path=tmp_path / "none.toml",
                            state_dir=state, detect_foreign=False)
