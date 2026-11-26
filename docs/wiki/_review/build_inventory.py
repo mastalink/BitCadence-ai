@@ -72,6 +72,8 @@ add('console','Portfolio','Refresh|Try again|Project card expand/collapse|Recent
 add('console','Portfolio','Priority and pause controls (read-only notice)',JOBS,257,'portfolio')
 add('console','Portfolio','Phone readable stacked project metrics',JOBS,185,'portfolio')
 add('console','Job Board','All|Active|Needs approval|Waiting|Done|Problems|Search title ID project workflow role worker|Session filter retention|Clear filters|All roles / role filter|Sort jobs / six choices|Desktop header sort|Phone stacked labeled rows|Whole filter buttons|Sort jobs on phone|Job row',JOBS,372,'find-and-order-work')
+add('console','Job Board','Preview stale jobs|Keep these jobs',JOBS,546,'preview-and-cancel-stale-jobs')
+add('console','Job Board','Cancel stale jobs',JOBS,596,'preview-and-cancel-stale-jobs','work_write')
 add('console','New job','+ New job|Title|Details|Role picker|Ask me before it runs|Retry budget|Escalate to role|Cancel / Ã—',JOBS,823,'create-a-job','draft')
 add('console','New job','Create job',JOBS,878,'create-a-job','work_write')
 add('console','New job','Phone role layout|Short-screen footer / unobscured actions',JOBS,882,'create-a-job','local_view')

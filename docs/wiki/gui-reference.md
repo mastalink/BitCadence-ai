@@ -50,7 +50,7 @@ The target host is shown, and links contain no bearer token. Dashboard verifies 
 2. Read **What's running**. Click a normal card to inspect its job. A Score card opens **Live view**, an automatically drawn, read-only run view. **Back to Home** returns without changing the run.
 3. **See all work** opens Job Board. Its initial data is still the bounded recent job collection, not complete history.
 
-Home marks an active job Stuck after ten minutes without a usable recent work/heartbeat timestamp. That label is a view flag, not a cancellation or a restart. Waiting and approval jobs do not become Stuck merely for being old. Score cards group by run and obtain actual plan step counts when available; missing plan data can omit counts. Home uses at most 200 recent jobs and displays a coverage notice at that limit; at most twenty visible plans refresh every thirty seconds. See [Home rules](Console-home.md) and [Score live](Score-live.md).
+Home marks an active job Stuck after ten minutes without a usable recent work/heartbeat timestamp. That label is a view flag, not a cancellation or a restart. Waiting and approval jobs do not become Stuck merely for being old. Score cards group by run and obtain actual plan step counts when available; missing plan data can omit counts. Home reads every unarchived job; archived work is not shown; at most twenty visible plans refresh every thirty seconds. See [Home rules](Console-home.md) and [Score live](Score-live.md).
 
 ## Portfolio
 
@@ -75,11 +75,15 @@ The card's "Priority and pause controls" line is a visible placeholder: those co
 
 ### Find and order work
 
-Choose **Job Board**, then combine **All**, **Active**, **Needs approval**, **Waiting**, **Done**, or **Problems** with search and **All roles**. Search checks title, job ID, project, workflow, role and worker. Every search word must match within the loaded jobs. Filters survive navigation and reload in this browser tab. **Clear filters** resets search, status and role together. Active includes pending/leased/in-progress. Problems includes failed/rejected/halted/cancelled.
+Choose **Job Board**, then combine **All**, **Active**, **Needs approval**, **Waiting**, **Done**, or **Problems** with search and **All roles**. Search checks title, job ID, project, workflow, role and worker. Every search word must match within the loaded jobs, which are all unarchived jobs; the sentence under the filters states how many are shown. Filters survive navigation and reload in this browser tab. **Clear filters** resets search, status and role together. Active includes pending/leased/in-progress. Problems includes failed/rejected/halted/cancelled.
 
 **Sort jobs** offers Priority then oldest, Newest first, Oldest first, Status, Assigned role and Title A–Z. The preference is saved locally. Native Job/Status/Assigned to/Updated header buttons also sort on desktop. Sorting does not edit priority or grant a lease. Choose a job title/open button for its drawer.
 
 At 760px and below, rows stack into a wide title and labeled status/assignment/source/workflow-or-retries/update fields. Filter buttons wrap as whole controls, long machine identifiers stay inside their field, and selection/title/control targets are at least 44px tall. The desktop header sort buttons are hidden; use **Sort jobs** instead. **Select all visible jobs**, individual selection, Clear selection and eligible batch controls remain available. Opening a job and selecting it are separate interactions. See the [phone walkthrough](job-board-and-tasks.md#on-a-phone).
+
+### Preview and cancel stale jobs
+
+**Preview stale jobs** lists old queued work that never started, plus expired dependency waits (older than `MCO_STALE_JOB_DAYS`, seven by default; zero lists nothing). Score-managed jobs are not listed. The preview records an audit event and changes no job. Review the list, then choose **Cancel stale jobs** to cancel only those jobs, or **Keep these jobs** to close the list. A preview can be applied once, within 15 minutes, by the same connection; an approver role with approval permission is required. Jobs that started since the preview are skipped. On an error, preview again. See [fleet reliability](../ops/fleet-reliability.md).
 
 ### Create a job
 
@@ -157,6 +161,8 @@ Choose **Helpers** in plain tone. Each card combines a shape, word and light wit
 **Fix it** first requests a diagnosis. Review every proposed change in **Here's what I found**. **Not now** dismisses it without applying. **Yes, fix it** applies the proposed repair and returns results. This is a repair of the helper set, not necessarily only the card you clicked; inspect the full plan. Review permissions and active work before confirming. See [repair workflow](Helpers.md#fix-it).
 
 ### Agent Fleet / tokens
+
+Each card in the console credential view also shows a state word: **Busy** (holds a lease), **Out of quota** (a worker reported a credit or quota problem; it can be tried again after the cooldown), **Broken** (an explicit worker fault), **Ready**, **Offline** or **Disabled**. Hovering the word shows the reason when one is recorded. Old queued work alone does not mark a helper broken.
 
 Use **Administration → Helper credentials**, Helpers’ **Manage credentials…**, or the retained `/dashboard` → Agents & Tokens. In the console credential view:
 
