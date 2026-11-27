@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>BitCadence managed runtime bootstrap for S-1-5-21-0000000000-0000000000-0000000000-1000</Description>
+    <URI>\BitCadence Runtime TEST-10a7b0b4197042c5a14e28e94fc6066d</URI>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="CurrentUser">
+      <UserId>S-1-5-21-0000000000-0000000000-0000000000-1000</UserId>
+      <LogonType>InteractiveToken</LogonType>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <RestartOnFailure>
+      <Count>3</Count>
+      <Interval>PT1M</Interval>
+    </RestartOnFailure>
+    <IdleSettings>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+  </Settings>
+  <Triggers>
+    <LogonTrigger>
+      <UserId>WORKSTATION\test-user</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Actions Context="CurrentUser">
+    <Exec>
+      <Command>C:\Python314\pythonw.exe</Command>
+      <Arguments>C:\BitCadence\scripts\check_runtime_bootstrap.py --action C:\Temp\BitCadence-isolated 10a7b0b4197042c5a14e28e94fc6066d 50372 50381</Arguments>
+      <WorkingDirectory>C:\Temp\BitCadence-isolated</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

@@ -5,7 +5,7 @@
   "baseline_commit": "ee45a86",
   "source_hash_status": "frozen",
   "counts": {
-    "grouped_control_or_workflow_entries": 344,
+    "grouped_control_or_workflow_entries": 330,
     "console_sidebar_pages": 13,
     "dashboard_pages": 5,
     "server_settings": 33
@@ -255,7 +255,7 @@
       "id": "gui-021",
       "surface": "console",
       "screen": "drawer",
-      "control": "Close ×",
+      "control": "Close \u00d7",
       "effect": "local_view",
       "verification": "source_implemented",
       "source": "src/mco/console_src/32c20ad6-cc53-43b3-a432-3a75e249b495.js",
@@ -987,7 +987,7 @@
       "id": "gui-082",
       "surface": "console",
       "screen": "New job",
-      "control": "Cancel / Ã—",
+      "control": "Cancel / \u00c3\u2014",
       "effect": "draft",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
@@ -1071,7 +1071,7 @@
       "id": "gui-089",
       "surface": "console",
       "screen": "Job details",
-      "control": "Close Ã—",
+      "control": "Close \u00c3\u2014",
       "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
@@ -3482,269 +3482,101 @@
     {
       "id": "gui-290",
       "surface": "windows",
-      "screen": "Local Control",
-      "control": "Start all",
-      "effect": "process_write",
+      "screen": "Runtime Status",
+      "control": "Runtime state and configuration error",
+      "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/desktop/app.py",
-      "line": 26,
+      "line": 43,
       "source_anchor": "class DesktopApp:",
       "documentation": "gui-reference.md#windows-local-control-and-tray"
     },
     {
       "id": "gui-291",
       "surface": "windows",
-      "screen": "Local Control",
-      "control": "Stop all",
-      "effect": "process_write",
+      "screen": "Runtime Status",
+      "control": "Component selection / state / process / last error",
+      "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/desktop/app.py",
-      "line": 26,
+      "line": 43,
       "source_anchor": "class DesktopApp:",
       "documentation": "gui-reference.md#windows-local-control-and-tray"
     },
     {
       "id": "gui-292",
       "surface": "windows",
-      "screen": "Local Control",
-      "control": "Restart all",
-      "effect": "process_write",
+      "screen": "Runtime Status",
+      "control": "Log viewer",
+      "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/desktop/app.py",
-      "line": 26,
+      "line": 43,
       "source_anchor": "class DesktopApp:",
       "documentation": "gui-reference.md#windows-local-control-and-tray"
     },
     {
       "id": "gui-293",
       "surface": "windows",
-      "screen": "Local Control",
-      "control": "Start selected",
-      "effect": "process_write",
+      "screen": "Runtime Status",
+      "control": "Open console",
+      "effect": "open_browser",
       "verification": "source_implemented",
       "source": "src/mco/desktop/app.py",
-      "line": 26,
+      "line": 43,
       "source_anchor": "class DesktopApp:",
       "documentation": "gui-reference.md#windows-local-control-and-tray"
     },
     {
       "id": "gui-294",
       "surface": "windows",
-      "screen": "Local Control",
-      "control": "Stop selected",
-      "effect": "process_write",
+      "screen": "Runtime Status",
+      "control": "Window X",
+      "effect": "hide_or_exit",
       "verification": "source_implemented",
       "source": "src/mco/desktop/app.py",
-      "line": 26,
+      "line": 43,
       "source_anchor": "class DesktopApp:",
       "documentation": "gui-reference.md#windows-local-control-and-tray"
     },
     {
       "id": "gui-295",
       "surface": "windows",
-      "screen": "Local Control",
-      "control": "Restart selected",
-      "effect": "process_write",
+      "screen": "Tray",
+      "control": "Open BitCadence",
+      "effect": "open_view",
       "verification": "source_implemented",
       "source": "src/mco/desktop/app.py",
-      "line": 26,
+      "line": 43,
       "source_anchor": "class DesktopApp:",
       "documentation": "gui-reference.md#windows-local-control-and-tray"
     },
     {
       "id": "gui-296",
       "surface": "windows",
-      "screen": "Local Control",
-      "control": "Component selection / states / process / last error",
-      "effect": "read",
+      "screen": "Tray",
+      "control": "Open console",
+      "effect": "open_view",
       "verification": "source_implemented",
       "source": "src/mco/desktop/app.py",
-      "line": 26,
+      "line": 43,
       "source_anchor": "class DesktopApp:",
       "documentation": "gui-reference.md#windows-local-control-and-tray"
     },
     {
       "id": "gui-297",
       "surface": "windows",
-      "screen": "Local Control",
-      "control": "Log viewer",
-      "effect": "read",
+      "screen": "Tray",
+      "control": "Exit observer",
+      "effect": "local_view",
       "verification": "source_implemented",
       "source": "src/mco/desktop/app.py",
-      "line": 26,
+      "line": 43,
       "source_anchor": "class DesktopApp:",
       "documentation": "gui-reference.md#windows-local-control-and-tray"
     },
     {
       "id": "gui-298",
-      "surface": "windows",
-      "screen": "Local Control",
-      "control": "Open console",
-      "effect": "open_browser",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-299",
-      "surface": "windows",
-      "screen": "Local Control",
-      "control": "Fleet settings",
-      "effect": "configuration_or_process_write",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-300",
-      "surface": "windows",
-      "screen": "Local Control",
-      "control": "Apply fleet changes review",
-      "effect": "configuration_or_process_write",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-301",
-      "surface": "windows",
-      "screen": "Local Control",
-      "control": "Apply / Cancel fleet change",
-      "effect": "configuration_or_process_write",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-302",
-      "surface": "windows",
-      "screen": "Local Control",
-      "control": "Move workers into app review",
-      "effect": "configuration_or_process_write",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-303",
-      "surface": "windows",
-      "screen": "Local Control",
-      "control": "Confirm / Cancel handoff",
-      "effect": "configuration_or_process_write",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-304",
-      "surface": "windows",
-      "screen": "Local Control",
-      "control": "Component and scheduled-task scope preview",
-      "effect": "configuration_or_process_write",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-305",
-      "surface": "windows",
-      "screen": "Local Control",
-      "control": "Stop all / Exit scope explanation",
-      "effect": "configuration_or_process_write",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-306",
-      "surface": "windows",
-      "screen": "Local Control",
-      "control": "Window X",
-      "effect": "hide_or_exit",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-307",
-      "surface": "windows",
-      "screen": "Tray",
-      "control": "Open BitCadence",
-      "effect": "open_view",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-308",
-      "surface": "windows",
-      "screen": "Tray",
-      "control": "Open console",
-      "effect": "open_view",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-309",
-      "surface": "windows",
-      "screen": "Tray",
-      "control": "Start all",
-      "effect": "process_write",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-310",
-      "surface": "windows",
-      "screen": "Tray",
-      "control": "Stop all",
-      "effect": "process_write",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-311",
-      "surface": "windows",
-      "screen": "Tray",
-      "control": "Exit",
-      "effect": "process_write",
-      "verification": "source_implemented",
-      "source": "src/mco/desktop/app.py",
-      "line": 26,
-      "source_anchor": "class DesktopApp:",
-      "documentation": "gui-reference.md#windows-local-control-and-tray"
-    },
-    {
-      "id": "gui-312",
       "surface": "dashboard",
       "screen": "Settings / governance",
       "control": "MCO_KILL_SWITCH",
@@ -3756,7 +3588,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-313",
+      "id": "gui-299",
       "surface": "dashboard",
       "screen": "Settings / governance",
       "control": "MCO_APPROVER_ROLES",
@@ -3768,7 +3600,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-314",
+      "id": "gui-300",
       "surface": "dashboard",
       "screen": "Settings / governance",
       "control": "MCO_POLICY_GATED_ROLES",
@@ -3780,7 +3612,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-315",
+      "id": "gui-301",
       "surface": "dashboard",
       "screen": "Settings / governance",
       "control": "MCO_ESCALATION_CONNECTOR",
@@ -3792,7 +3624,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-316",
+      "id": "gui-302",
       "surface": "dashboard",
       "screen": "Settings / governance",
       "control": "MCO_DEFAULT_JOB_SORT",
@@ -3804,7 +3636,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-317",
+      "id": "gui-303",
       "surface": "dashboard",
       "screen": "Settings / memory",
       "control": "MCO_DRUMLINE_DISTILL",
@@ -3816,7 +3648,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-318",
+      "id": "gui-304",
       "surface": "dashboard",
       "screen": "Settings / memory",
       "control": "MCO_DRUMLINE_INJECT",
@@ -3828,7 +3660,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-319",
+      "id": "gui-305",
       "surface": "dashboard",
       "screen": "Settings / presence",
       "control": "MCO_AGENT_OFFLINE_AFTER",
@@ -3840,7 +3672,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-320",
+      "id": "gui-306",
       "surface": "dashboard",
       "screen": "Settings / delivery",
       "control": "MCO_DELIVERY_STALL_SECONDS",
@@ -3852,7 +3684,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-321",
+      "id": "gui-307",
       "surface": "dashboard",
       "screen": "Settings / delivery",
       "control": "MCO_ROUTE_FALLBACKS",
@@ -3864,7 +3696,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-322",
+      "id": "gui-308",
       "surface": "dashboard",
       "screen": "Settings / delivery",
       "control": "MCO_DELIVERY_MAX_REROUTES",
@@ -3876,7 +3708,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-323",
+      "id": "gui-309",
       "surface": "dashboard",
       "screen": "Settings / score",
       "control": "MCO_SCORE_SWEEP_SECONDS",
@@ -3888,7 +3720,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-324",
+      "id": "gui-310",
       "surface": "dashboard",
       "screen": "Settings / jev",
       "control": "MCO_JEV_MODE",
@@ -3900,7 +3732,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-325",
+      "id": "gui-311",
       "surface": "dashboard",
       "screen": "Settings / jev",
       "control": "MCO_JEV_MODEL",
@@ -3912,7 +3744,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-326",
+      "id": "gui-312",
       "surface": "dashboard",
       "screen": "Settings / jev",
       "control": "MCO_JEV_TIMEOUT_SECONDS",
@@ -3924,7 +3756,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-327",
+      "id": "gui-313",
       "surface": "dashboard",
       "screen": "Settings / jev",
       "control": "MCO_JEV_MAX_RETRIES",
@@ -3936,7 +3768,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-328",
+      "id": "gui-314",
       "surface": "dashboard",
       "screen": "Settings / observability",
       "control": "MCO_METRICS_TOKEN",
@@ -3948,7 +3780,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-329",
+      "id": "gui-315",
       "surface": "dashboard",
       "screen": "Settings / observability",
       "control": "MCO_LOG_JSON",
@@ -3960,7 +3792,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-330",
+      "id": "gui-316",
       "surface": "dashboard",
       "screen": "Settings / tenancy",
       "control": "MCO_ORGS",
@@ -3972,7 +3804,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-331",
+      "id": "gui-317",
       "surface": "dashboard",
       "screen": "Settings / edition",
       "control": "MCO_EDITION",
@@ -3984,7 +3816,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-332",
+      "id": "gui-318",
       "surface": "dashboard",
       "screen": "Settings / security",
       "control": "MCO_TRUSTED_HEADER_AUTH",
@@ -3996,7 +3828,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-333",
+      "id": "gui-319",
       "surface": "dashboard",
       "screen": "Settings / security",
       "control": "MCO_TRUSTED_HEADER_USER",
@@ -4008,7 +3840,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-334",
+      "id": "gui-320",
       "surface": "dashboard",
       "screen": "Settings / security",
       "control": "MCO_TRUSTED_HEADER_ROLE",
@@ -4020,7 +3852,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-335",
+      "id": "gui-321",
       "surface": "dashboard",
       "screen": "Settings / security",
       "control": "MCO_TRUSTED_HEADER_DEFAULT_ROLE",
@@ -4032,7 +3864,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-336",
+      "id": "gui-322",
       "surface": "dashboard",
       "screen": "Settings / security",
       "control": "MCO_TRUSTED_HEADER_SECRET",
@@ -4044,7 +3876,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-337",
+      "id": "gui-323",
       "surface": "dashboard",
       "screen": "Settings / security",
       "control": "MCO_WEBHOOK_SECRET",
@@ -4056,7 +3888,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-338",
+      "id": "gui-324",
       "surface": "dashboard",
       "screen": "Settings / notifications",
       "control": "NTFY_SERVER",
@@ -4068,7 +3900,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-339",
+      "id": "gui-325",
       "surface": "dashboard",
       "screen": "Settings / notifications",
       "control": "NTFY_TOPIC",
@@ -4080,7 +3912,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-340",
+      "id": "gui-326",
       "surface": "dashboard",
       "screen": "Settings / connectors",
       "control": "SERVICENOW_INSTANCE_URL",
@@ -4092,7 +3924,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-341",
+      "id": "gui-327",
       "surface": "dashboard",
       "screen": "Settings / connectors",
       "control": "SERVICENOW_USERNAME",
@@ -4104,7 +3936,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-342",
+      "id": "gui-328",
       "surface": "dashboard",
       "screen": "Settings / connectors",
       "control": "SERVICENOW_PASSWORD",
@@ -4116,7 +3948,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-343",
+      "id": "gui-329",
       "surface": "dashboard",
       "screen": "Settings / connectors",
       "control": "DYNATRACE_BASE_URL",
@@ -4128,7 +3960,7 @@
       "documentation": "gui-reference.md#technical-control-plane-settings"
     },
     {
-      "id": "gui-344",
+      "id": "gui-330",
       "surface": "dashboard",
       "screen": "Settings / connectors",
       "control": "DYNATRACE_API_TOKEN",
@@ -4182,16 +4014,20 @@
       "sha256": "54a8b8fb17fdd9b112ec2484839c1ea61b50ae72d50496156b6dc32ea63e4146"
     },
     {
+      "path": "src/mco/console_src/loader.js",
+      "sha256": "88dc893d970308cdd726c9b217b17b5af7ff4ec23a657905fd7d8a7c6ee3467c"
+    },
+    {
       "path": "src/mco/dashboard.py",
       "sha256": "77902a3a5fc17fa8f6b1aaed18ca77a74b633c227a2062e48a5a63d5c1afbbb9"
     },
     {
       "path": "src/mco/desktop/app.py",
-      "sha256": "231e494ec7f17ae82598a31ff0220bf0e76a814c2d27a98606f4f41a993f91e3"
+      "sha256": "814126b8687ed11f967cbf69487c0949eaf270b2f55406c42bd6aea2b59de062"
     },
     {
       "path": "src/mco/desktop/controller.py",
-      "sha256": "80e2de2e7c6af18af133967b30839816fa513a606205148fc117a4b31127c250"
+      "sha256": "ab9f29cf7848ad38cb47d193ef0e809ee17b20429c69d14ea7545ce64228a298"
     },
     {
       "path": "src/mco/orchestrator/admin_routes.py",
@@ -4217,6 +4053,7 @@
     "src/mco/console_src/bb158701-74ed-4f8d-8363-e8eb7edb6768.js",
     "src/mco/console_src/e63b9c8d-2594-472b-aed9-92e2be49df5d.js",
     "src/mco/console_src/index.json",
+    "src/mco/console_src/loader.js",
     "src/mco/dashboard.py",
     "src/mco/desktop/app.py",
     "src/mco/desktop/controller.py",

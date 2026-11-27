@@ -71,6 +71,8 @@ def test_restart_with_a_corrupt_file_runs_the_last_known_good(tmp_path):
     second.start()
     assert "alpha-program" in second.adapter.alive()
     assert "last-known-good" in second.config.last_error
+    second.config.poll(force=True)
+    assert "running last-known-good generation" in second.config.last_error
     second.shutdown()
 
 
@@ -115,5 +117,32 @@ def test_rollback_under_stop_restores_the_file_and_applies_after(tmp_path, stop_
     stop_file.unlink()
     clock.advance(10)
     runtime.step()
+    assert workers(runtime) == ["one"]
+    runtime.shutdown()
+
+
+def test_failed_rollback_does_not_consume_history_or_replace_fleet(tmp_path, monkeypatch):
+    runtime, clock = started(tmp_path / "home", "one")
+    edit(runtime, clock, fleet("two"))
+    config = runtime.config
+    active = config.generation
+    current = runtime.paths.fleet.read_bytes()
+    saved = [(file, file.read_bytes()) for file in config.store.generations()]
+    backup = runtime.paths.fleet.with_suffix(".toml.rolled-back")
+    backup.write_bytes(b"previous backup")
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("reconcile failed")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(config, "_apply", fail)
+        with pytest.raises(RuntimeError, match="reconcile failed"):
+            config.rollback()
+    assert config.generation == active
+    assert workers(runtime) == ["two"]
+    assert runtime.paths.fleet.read_bytes() == current
+    assert backup.read_bytes() == b"previous backup"
+    assert [(file, file.read_bytes()) for file in config.store.generations()] == saved
+    config.rollback()
     assert workers(runtime) == ["one"]
     runtime.shutdown()

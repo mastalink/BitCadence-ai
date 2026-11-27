@@ -52,7 +52,8 @@ Exactly one supervisor runs per user (a user-SID mutex). A second instance start
 
 | Event | Runtime | Exit code | Bootstrap | Watchdog |
 |---|---|---|---|---|
-| Unexpected crash | — | non-zero | restarts | alerts only if recovery fails (restarted 3x and still down) |
+| Unexpected crash | — | non-zero | launcher retries up to 3 times, one minute apart | alerts only if recovery fails (restarted 3x and still down) |
+| Duplicate start | existing runtime continues | 3 for manual start, 0 at task boundary | no retry | existing runtime remains authoritative |
 | Deliberate stop (`runtime stop`) | stops children gracefully | 0 | nothing | silent (state = stopped) |
 | Maintenance | stays up, children stopped, schedules held | — | nothing | silent (state = maintenance) |
 | Global STOP | stays up, quiesced: no spawns, no schedule fires, no external side effects | — | nothing | reports STOP, never "fixes" it |

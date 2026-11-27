@@ -8,7 +8,9 @@ nothing is reconciled while the global STOP is set.
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 import hashlib
+from pathlib import Path
 import threading
 import time
 from typing import Callable
@@ -44,7 +46,25 @@ def parse(manager: FleetConfigManager, content: bytes) -> dict[str, WorkerConfig
     return workers
 
 
-def rollback_files(manager: FleetConfigManager, store: LkgStore) -> bytes:
+def _read_optional(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def _restore(path: Path, content: bytes | None) -> None:
+    if content is None:
+        path.unlink(missing_ok=True)
+    else:
+        atomic_write(path, content)
+
+
+def rollback_files(
+    manager: FleetConfigManager,
+    store: LkgStore,
+    apply: Callable[[bytes, dict[str, WorkerConfig]], None] | None = None,
+) -> bytes:
     """Make the previous generation the current ``fleet.toml``; returns its content.
 
     The file being replaced is kept beside it as ``fleet.toml.rolled-back``. The newest generation is dropped, so a
@@ -54,15 +74,23 @@ def rollback_files(manager: FleetConfigManager, store: LkgStore) -> bytes:
     if len(generations) < 2:
         raise RollbackUnavailable("there is no earlier configuration generation to roll back to")
     content = generations[-2].read_bytes()
-    parse(manager, content)  # a generation that no longer validates is never written over a file
-    try:
-        current: bytes | None = manager.path.read_bytes()
-    except FileNotFoundError:
-        current = None
-    if current is not None:
-        atomic_write(manager.path.with_name(manager.path.name + ".rolled-back"), current)
-    atomic_write(manager.path, content)
-    generations[-1].unlink(missing_ok=True)
+    parsed = parse(manager, content)
+    current = _read_optional(manager.path)
+    newest = generations[-1]
+    newest_content = newest.read_bytes()
+    with ExitStack() as undo:
+        if current is not None:
+            backup = manager.path.with_name(manager.path.name + ".rolled-back")
+            old_backup = _read_optional(backup)
+            atomic_write(backup, current)
+            undo.callback(_restore, backup, old_backup)
+        atomic_write(manager.path, content)
+        undo.callback(_restore, manager.path, current)
+        newest.unlink()
+        undo.callback(atomic_write, newest, newest_content)
+        if apply is not None:
+            apply(content, parsed)
+        undo.pop_all()
     return content
 
 
@@ -85,6 +113,7 @@ class RuntimeConfig:
         self.settle = settle
         self.next_check = 0.0
         self.last_error: str | None = None
+        self._fallback_generation: str | None = None
         self._running: str | None = None  # digest of the applied content; None until something is applied
         self._lock = threading.RLock()
 
@@ -93,10 +122,12 @@ class RuntimeConfig:
         return self._running or ABSENT
 
     def _read(self) -> bytes | None:
-        try:
-            return self.manager.path.read_bytes()
-        except FileNotFoundError:
-            return None
+        return _read_optional(self.manager.path)
+
+    def _config_error(self, message: str) -> None:
+        if self._fallback_generation is not None:
+            message += f"; running last-known-good generation {self._fallback_generation}"
+        self.last_error = message
 
     def load_initial(self) -> None:
         """Apply the file; if it cannot be used, apply the newest generation that can."""
@@ -117,7 +148,8 @@ class RuntimeConfig:
                     self._apply(content, parse(self.manager, content))
                 except Exception:
                     continue
-                self.last_error = f"{error}; running last-known-good generation {path.name}"
+                self._fallback_generation = path.name
+                self._config_error(str(error))
                 return
             # Nothing usable anywhere: the runtime still owns the gateway and the scheduler.
             self.supervisor.reconcile({})
@@ -136,24 +168,25 @@ class RuntimeConfig:
             try:
                 content = self._read()
                 if _digest(content) == self.generation and not force:
+                    self._fallback_generation = None
                     self.last_error = None
                     return False
                 if content is None or not content.strip():
                     if self._running is None and content is None:
                         return False
                     # What an in-place write looks like halfway through; never read as "remove every worker".
-                    self.last_error = (
+                    self._config_error(
                         f"{self.manager.path.name} is missing or empty; keeping the running configuration"
                     )
                     return False
                 if self.settle > 0:
                     time.sleep(self.settle)
                     if self._read() != content:
-                        self.last_error = "fleet config is still changing; waiting for it to settle"
+                        self._config_error("fleet config is still changing; waiting for it to settle")
                         return False
                 self._apply(content, parse(self.manager, content))
             except Exception as exc:
-                self.last_error = f"invalid fleet config, keeping the running configuration: {exc}"
+                self._config_error(f"invalid fleet config, keeping the running configuration: {exc}")
                 return False
             return True
 
@@ -173,17 +206,22 @@ class RuntimeConfig:
 
     def rollback(self) -> str:
         with self._lock:
-            content = rollback_files(self.manager, self.store)
             if stop_active():
                 # The file is restored now; poll() applies it when STOP is cleared.
-                return _digest(content)
-            self._apply(content, parse(self.manager, content))
-            return self.generation
+                return _digest(rollback_files(self.manager, self.store))
 
-    def _apply(self, content: bytes, workers: dict[str, WorkerConfig]) -> None:
+            def apply(content: bytes, workers: dict[str, WorkerConfig]) -> None:
+                self._apply(content, workers, retain=False)
+
+            return _digest(rollback_files(self.manager, self.store, apply))
+
+    def _apply(self, content: bytes, workers: dict[str, WorkerConfig], *, retain: bool = True) -> None:
         self.supervisor.reconcile(workers)
         self._running = _digest(content)
+        self._fallback_generation = None
         self.last_error = None
+        if not retain:
+            return
         try:
             self.store.save(content)
         except OSError as exc:

@@ -4,7 +4,7 @@ The browser phone follow-up was checked on **November 16, 2026**, on source base
 
 ## CLI coverage
 
-The [complete CLI reference](mco-cli-reference.md) maps **123 command/group paths** and **376 arguments and options** across the shared `bitcadence` / `mco` tree. It includes nested groups, defaults, required arguments, option aliases, repeatable values, hidden compatibility options and synthesized help/completion options. Each command has a purpose, safe example, expected result and recovery notes.
+The [complete CLI reference](mco-cli-reference.md) maps **125 command/group paths** and **379 arguments and options** across the shared `bitcadence` / `mco` tree. It includes nested groups, defaults, required arguments, option aliases, repeatable values, hidden compatibility options and synthesized help/completion options. Each command has a purpose, safe example, expected result and recovery notes.
 
 The [machine-readable inventory](_review/cli-coverage.json) binds every path and parameter to a documentation anchor and source metadata. The checker compares the actual Typer command tree without invoking operational callbacks. Unknown commands/options, changed defaults and missing anchors are failures. Negative-control checks also verified that the checker rejects missing/stale commands and parameters.
 
@@ -12,7 +12,7 @@ The desktop executable is separate and is covered under [Windows Local Control a
 
 ## GUI coverage
 
-The [GUI reference](gui-reference.md) covers thirteen console destinations, Score/detail views, the five-page dashboard, administration/lock/modal flows, Windows/tray actions and **33 server-driven settings**. Its [344 grouped control/workflow mappings](_review/gui-feature-coverage.json) link instructions to current component/function locations. The phone follow-up is based on `ee45a86`, not a claim that an already running app was updated.
+The [GUI reference](gui-reference.md) covers thirteen console destinations, Score/detail views, the five-page dashboard, administration/lock/modal flows, the Windows desktop observer and **33 server-driven settings**. Its [grouped control and workflow mappings](_review/gui-feature-coverage.json) link instructions to current component or function locations.
 
 This is grouped coverage, not every dynamic record/option. Unreachable legacy components are separate. Isolated behavior fixtures and measured disposable/fixture browser checks support the [U01–U24 ledger](UX-REVIEW.md); production deployment, physical-device behavior, screen-reader conformance and end-to-end work are not inferred.
 

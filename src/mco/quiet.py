@@ -54,7 +54,7 @@ def hidden_python(gui: bool = False) -> str:
     The gateway keeps ``python.exe`` (it needs real standard streams for its log
     file; a hidden console comes from CREATE_NO_WINDOW). Pure GUI processes, such
     as the tray and the sign-in entry, use ``pythonw.exe``, which never opens a
-    console at all. Same split as ``desktop.controller.StackSupervisor``.
+    console at all.
     """
     if os.name != "nt":
         return sys.executable

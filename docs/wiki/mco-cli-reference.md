@@ -87,11 +87,13 @@ This reference covers every registered command and group recursively, every posi
 - [mco review](#cli-mco-review) — Send work to independent reviewers from different model families.
   - [mco review fanout](#cli-mco-review-fanout) — Post one review job per model family (Codex/GPT, Gemini/Antigravity, ...), skipping the builder's.
 - [mco runtime](#cli-mco-runtime) — The background runtime that owns the gateway, the scheduler and the workers.
+  - [mco runtime install-bootstrap](#cli-mco-runtime-install-bootstrap) — Registers the Windows sign-in task and exports its XML as UTF-16.
   - [mco runtime maintenance](#cli-mco-runtime-maintenance) — Maintenance mode: the runtime stays up, its children are stopped and schedules are held.
   - [mco runtime rollback](#cli-mco-runtime-rollback) — Restore the previous last-known-good fleet configuration.
   - [mco runtime run](#cli-mco-runtime-run) — Run the runtime in the foreground. Exit 0 only after a deliberate stop; non-zero means it crashed.
   - [mco runtime status](#cli-mco-runtime-status) — Show the runtime's state. Exit 1 when it should be running and is not (crashed, dead or silent).
   - [mco runtime stop](#cli-mco-runtime-stop) — Stop the runtime and its children deliberately (it exits 0 and is not restarted).
+  - [mco runtime uninstall-bootstrap](#cli-mco-runtime-uninstall-bootstrap) — Removes the Windows sign-in task.
 - [mco schedule](#cli-mco-schedule) — Schedules and loops: what work gets created, and when.
   - [mco schedule add](#cli-mco-schedule-add) — Add a schedule by asking what, how often and what time.
   - [mco schedule disable](#cli-mco-schedule-disable) — Disable a schedule or loop, leaving its definition and history intact.
@@ -1445,13 +1447,31 @@ Usage example: `bitcadence runtime --help`
 
 **Expected result:** Lists the runtime lifecycle commands.
 
-**If it fails / before changing state:** Help only; nothing starts. The runtime is not registered with the operating system by these commands.
+**If it fails / before changing state:** Use the individual subcommand help to inspect each action. Installing bootstrap is a separate Windows-only operation.
 
 Implementation: [src/mco/runtime/cli.py:16](../../src/mco/runtime/cli.py#L16). Global/group options: [mco](#cli-mco).
 
 | Argument / option | Type and requirement | Default | Meaning / constraints |
 |---|---|---|---|
 | <a id="cli-mco-runtime-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-runtime-install-bootstrap"></a>
+## `mco runtime install-bootstrap`
+
+Register the current user's Windows sign-in task and export its XML as UTF-16.
+
+Run `bitcadence runtime install-bootstrap` from the account that will run the runtime.
+
+The task starts at the user's next sign-in. The default XML export is `~/.mco/runtime/bootstrap.xml`.
+Follow the [runtime migration rules](../adr/0004-runtime-bootstrap-supervision.md#migration-rules)
+before enabling bootstrap on a machine with existing worker or service registrations.
+
+See the [install command implementation](../../src/mco/runtime/cli.py#L74).
+
+| Argument / option | Type and requirement | Default | Meaning |
+|---|---|---|---|
+| <a id="cli-mco-runtime-install-bootstrap-param-xml"></a>`--xml` | PATH; optional | `~/.mco/runtime/bootstrap.xml` | Output path for the UTF-16 Scheduled Task XML. |
+| <a id="cli-mco-runtime-install-bootstrap-param-help"></a>`--help` | BOOLEAN; flag; optional | unset | Show this message and exit. |
 
 <a id="cli-mco-runtime-maintenance"></a>
 ## `mco runtime maintenance`
@@ -1544,6 +1564,22 @@ Implementation: [src/mco/runtime/cli.py:73](../../src/mco/runtime/cli.py#L73). G
 |---|---|---|---|
 | <a id="cli-mco-runtime-stop-param-timeout"></a>`--timeout` | FLOAT; optional | `60.0` | Seconds to wait for it to finish stopping. |
 | <a id="cli-mco-runtime-stop-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-runtime-uninstall-bootstrap"></a>
+## `mco runtime uninstall-bootstrap`
+
+Remove the current user's Windows sign-in task.
+
+Run `bitcadence runtime uninstall-bootstrap` from the account that installed the task.
+
+This removes the task and ends its active action if necessary. For graceful shutdown,
+run `bitcadence runtime stop` first. The exported XML and runtime data remain.
+
+See the [uninstall command implementation](../../src/mco/runtime/cli.py#L88).
+
+| Argument / option | Type and requirement | Default | Meaning |
+|---|---|---|---|
+| <a id="cli-mco-runtime-uninstall-bootstrap-param-help"></a>`--help` | BOOLEAN; flag; optional | unset | Show this message and exit. |
 
 <a id="cli-mco-schedule"></a>
 ## `mco schedule`

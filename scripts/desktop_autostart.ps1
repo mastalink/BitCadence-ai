@@ -16,8 +16,8 @@ if (-not $Pythonw -or -not (Test-Path -LiteralPath $Pythonw)) {
 $DesktopShell = New-Object -ComObject WScript.Shell
 $DesktopLink = $DesktopShell.CreateShortcut($DesktopStartupLink)
 $DesktopLink.TargetPath = (Resolve-Path -LiteralPath $Pythonw).Path
-$DesktopLink.Arguments = '"' + (Join-Path $DesktopRepo 'scripts/desktop.pyw') + '" --start-all --minimized'
+$DesktopLink.Arguments = '"' + (Join-Path $DesktopRepo 'scripts/desktop.pyw') + '" --minimized'
 $DesktopLink.WorkingDirectory = $DesktopRepo
-$DesktopLink.Description = 'Start the BitCadence desktop supervisor and configured workers at sign-in'
+$DesktopLink.Description = 'Open the BitCadence runtime observer at sign-in'
 $DesktopLink.Save()
 Write-Output "Installed sign-in startup: $DesktopStartupLink"

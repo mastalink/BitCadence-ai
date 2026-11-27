@@ -339,28 +339,16 @@ The **Edition** table is read-only feature availability evidence, not an activat
 
 ## Windows Local Control and tray
 
-See [installation/shortcut setup](desktop-app-and-tray.md#1-installation-one-click-installer-desktop-shortcut). The following controls are verified in `src/mco/desktop/app.py` and `controller.py`; no live start/stop was performed for this guide.
+The Windows Tkinter desktop is a read-only observer of the local runtime. See the [desktop and sign-in guide](desktop-app-and-tray.md) for installation and task registration.
 
-| Control | Steps and actual scope | Expected feedback / recovery |
-|---|---|---|
-| Start all | Starts gateway, waits for readiness, then scheduler and configured enabled workers. Already-running external matches are recognized. | Inspect each row, not only global Gateway ready. Worker failures can be reported while other components start. |
-| Stop all | Stops configured components, including exact matching external processes belonging to the same user, and disables/ends their scheduled tasks. | Can interrupt active executors. Inspect component rows and logs; it is broader than Exit. |
-| Restart all | Stop all then Start all. | May interrupt active work and leave scheduled tasks disabled. Verify the complete stack afterward. |
-| Component row | Select a row to filter the bottom log viewer to its last 100 lines. State/Process/Last error show component evidence. | External workers retain their original logs; an empty app log is not evidence they are silent. |
-| Start selected | Select one component then Start selected. The table allows one row; selected actions disable with no selection or while busy. | Gateway must be ready before scheduler/workers. |
-| Stop selected | Select the intended component then Stop selected. | Stops its process tree/exact external match and disables its matching scheduled task. |
-| Restart selected | Select the component then Restart selected. | Stop then start; inspect the row and work ownership before/after. |
-| Open console | Opens the configured local `/console` in the default browser. | It does not start the server or authenticate that browser automatically. |
-| Fleet settings | Opens the fleet TOML in Notepad, creating a starter file if absent. Save intentionally. | This button can write/create a file even before Reload. See [fleet schema](sidecars-and-fleet-daemons.md#supported-fields). |
-| Apply fleet changes… | Reviews added/changed/removed names. Cancel changes nothing; confirm invokes existing reconciliation. Changed/removed components may stop, including exact external matches. | Added definitions are configured, not started. The file is read again on apply; verify state before/after. |
-| Move workers into app… | Reviews components, observed states/PIDs and enabled tasks. Cancel changes nothing; confirm disables matching tasks, stops configured trees, then starts app supervision. | Do between jobs with authorization. Work/lease status is unknown; process presence does not prove a between-job window. Scope is rechecked on apply. |
-| Window X | Hides the window if tray support exists; otherwise exits. | Tray fallback explicitly warns that close exits. |
+| Control | Behavior |
+|---|---|
+| Component row | Select a component to filter the runtime logs. The row shows its state, PID and last error. |
+| Open console | Opens the local gateway's browser console. |
+| Window X | Hides the observer in the tray when available, or exits it. |
+| Tray menu | Opens the observer, opens the console, or exits the observer. Runtime execution continues. |
 
-Right-click the tray icon: **Open BitCadence** restores the control window; **Start all**, **Stop all** and **Open console** have the same scope as above; **Exit** shuts down only supervisor-owned child processes and exits. Exact external workers remain unless Stop was used. A second shortcut launch brings forward the existing app; `--start-all` can also request a start in that instance.
-
-“Scheduled workers are still enabled” means duplicate-start protection refused a new app-owned worker. Existing scheduled workers may still run. Either keep their current management or intentionally use Move workers into app between jobs. Do not kill arbitrary Python processes or erase `~/.mco` as a first recovery step. Read the specific component Last error and original log. Readiness alone does not establish a usable fleet.
-
-Autostart is configured through the [autostart script](desktop-app-and-tray.md#5-configuring-autostart-on-sign-in), not a checkbox in this window. There is no GUI port editor or updater; launcher options/configuration and the documented installation update process provide those capabilities.
+Use the runtime CLI to manage the runtime and its bootstrap. The status line distinguishes offline, stale, unreachable, running, maintenance and quiesced states.
 
 ## Coverage and limits
 
