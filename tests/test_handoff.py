@@ -137,7 +137,7 @@ def test_failure_rounds_escalate_after_three_fixes(tmp_path):
     start_reviews(h)
     for round_number in range(4):
         first, second, third = review_ids(h, round_number)
-        h.client.finish(first, status="failed")
+        h.client.finish(first, {"verdict": "pass", "findings": []})
         h.client.finish(second, {"verdict": "pass", "findings": [], "notes": "inspected"})
         h.advance()
         assert h.job_id("A", f"fix-{round_number + 1}") not in h.client.jobs
@@ -145,7 +145,7 @@ def test_failure_rounds_escalate_after_three_fixes(tmp_path):
         h.advance()
         if round_number < 3:
             fix_id = h.job_id("A", f"fix-{round_number + 1}")
-            assert first not in h.client.jobs[fix_id]["depends_on"]
+            assert first in h.client.jobs[fix_id]["depends_on"]
             assert "regression" in h.client.jobs[fix_id]["prompt"]
             sha = str(round_number + 1) * 40
             h.github.pr = replace(h.github.pr, head=sha)
@@ -228,6 +228,8 @@ def test_github_requires_a_visible_green_check(monkeypatch):
 
     def run(args, **kwargs):
         assert args[:6] == ["gh", "pr", "view", "17", "--repo", "example-labs/demo"]
+        assert kwargs["stdin"] == subprocess.DEVNULL
+        assert kwargs["creationflags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0)
         return subprocess.CompletedProcess(args, 0, json.dumps(payload), "")
 
     monkeypatch.setattr(subprocess, "run", run)
@@ -240,3 +242,77 @@ def test_github_requires_a_visible_green_check(monkeypatch):
     assert not gh.pull_request("example-labs/demo", 17).green
     payload["statusCheckRollup"][1]["state"] = "SUCCESS"
     assert gh.pull_request("example-labs/demo", 17).green
+
+
+@pytest.mark.parametrize("outcome", ["failed", "malformed", "silent"])
+def test_no_review_verdict_escalates_without_creating_a_fix(tmp_path, outcome):
+    from datetime import datetime, timedelta, timezone
+    h = setup_harness(tmp_path)
+    start_reviews(h)
+    first, second, third = review_ids(h)
+    for review in (second, third):
+        h.client.finish(review, {"verdict": "pass", "findings": []})
+    if outcome == "failed":
+        h.client.finish(first, status="failed")
+    elif outcome == "malformed":
+        h.client.jobs[first].update(status="completed", output_payload={"result": "invalid"})
+    else:
+        created = datetime.now(timezone.utc) - timedelta(days=2)
+        h.client.jobs[first].update(created_at=created.isoformat())
+    assert "escalate" in h.status()["A"]
+    assert h.advance()["A"] == "escalated"
+    escalation = h.client.jobs[h.job_id("A", "escalate")]
+    assert escalation["requires_approval"]
+    assert "alpha" in escalation["prompt"]
+    assert h.job_id("A", "fix-1") not in h.client.jobs
+    h.advance()
+    assert h.client.posts.count(escalation["id"]) == 1
+
+
+def test_string_output_and_pass_without_findings_can_reach_gate(tmp_path):
+    h = setup_harness(tmp_path)
+    start_reviews(h)
+    for review in review_ids(h):
+        h.client.jobs[review].update(status="completed", output_payload='{"verdict":"pass"}')
+    assert h.advance()["A"] == "merge approval posted"
+
+
+def test_watch_retries_a_transient_failure(monkeypatch, tmp_path):
+    from mco import cli, handoff
+    import time
+    h = setup_harness(tmp_path)
+    attempts = []
+
+    def advance():
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise RuntimeError("temporary gateway failure")
+        return {"A": "build posted"}
+
+    def sleep(_):
+        if len(attempts) == 2:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(h, "advance", advance)
+    monkeypatch.setattr(handoff, "Harness", lambda *args: h)
+    monkeypatch.setattr(handoff, "load_deployment", lambda *args: h.deployment)
+    monkeypatch.setattr(cli, "_gateway_client", lambda: h.client)
+    monkeypatch.setattr(time, "sleep", sleep)
+    assert cli._run_handoff("watch", tmp_path / "packages.toml", None) is None
+    assert len(attempts) == 2
+
+
+def test_invalid_package_does_not_stop_independent_packages(tmp_path, monkeypatch):
+    h = setup_harness(tmp_path)
+    h.program.packages["B"] = replace(h.program.packages["B"], depends=())
+    original = h._panel
+
+    def panel(package):
+        if package.id == "A":
+            raise ValueError("reviewer setup is missing")
+        return original(package)
+
+    monkeypatch.setattr(h, "_panel", panel)
+    result = h.advance()
+    assert "reviewer setup is missing" in result["A"]
+    assert result["B"] == "build posted"

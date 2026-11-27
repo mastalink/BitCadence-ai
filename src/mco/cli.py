@@ -3597,7 +3597,14 @@ def _run_handoff(command: str, program: Path, config: Optional[Path],
             return
         previous = {}
         while True:
-            states = harness.status() if command == "status" else harness.advance()
+            try:
+                states = harness.status() if command == "status" else harness.advance()
+            except (OSError, RuntimeError, httpx.HTTPError) as exc:
+                if command != "watch" or (isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 500):
+                    raise
+                typer.echo(f"Handoff pass failed: {exc}. Retrying next pass.", err=True)
+                time.sleep(interval)
+                continue
             for package_id, state in states.items():
                 if previous.get(package_id) != state:
                     typer.echo(f"{package_id}  {state}")

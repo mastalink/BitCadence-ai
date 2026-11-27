@@ -6,6 +6,7 @@ import json
 import re
 import subprocess
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from graphlib import TopologicalSorter
 from pathlib import Path
 from typing import Optional
@@ -20,6 +21,7 @@ except ModuleNotFoundError:  # Python 3.9 and 3.10
 
 
 DEFAULT_CONFIG = Path.home() / ".mco" / "deployment" / "handoff.toml"
+_REVIEW_DEADLINE = timedelta(hours=24)
 _STOPPED = {"failed", "cancelled", "rejected", "halted"}
 _SHA = re.compile(r"[0-9a-f]{40}")
 _REPO = re.compile(r"(?:[a-zA-Z0-9.-]+/)?[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+")
@@ -154,6 +156,7 @@ class GitHub:
                 ["gh", "pr", "view", str(number), "--repo", repo, "--json",
                  "number,headRefOid,baseRefName,isDraft,state,statusCheckRollup"],
                 check=True, capture_output=True, encoding="utf-8", timeout=30,
+                stdin=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except (OSError, subprocess.SubprocessError) as exc:
             detail = getattr(exc, "stderr", None) or str(exc)
@@ -193,13 +196,24 @@ class Revision:
 
 
 def _result(job: dict) -> dict:
-    data = (job.get("output_payload") or {}).get("result")
+    output = job.get("output_payload")
+    data = output.get("result") if isinstance(output, dict) else output
     if isinstance(data, str):
         try:
             data = json.loads(data)
-        except ValueError:
+        except (ValueError, RecursionError):
             return {}
     return data if isinstance(data, dict) else {}
+
+
+def _review_timed_out(job: dict, cutoff: datetime) -> bool:
+    try:
+        created = datetime.fromisoformat(str(job.get("created_at")).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return created <= cutoff
 
 
 def _bullets(items: tuple[str, ...]) -> str:
@@ -343,18 +357,38 @@ class Harness:
                 )
             return ("reviews posted" if write else "ready to post reviews"), [], []
 
-        completed, failures = [], []
+        completed, failures, missing_verdict = [], [], []
+        pending = False
+        cutoff = datetime.now(timezone.utc) - _REVIEW_DEADLINE
         for family, job in jobs.items():
             status = job["status"]
-            if status == "completed":
+            if status in _STOPPED:
+                missing_verdict.append({"family": family, "status": status, "error": job.get("error_message")})
+            elif status == "completed":
                 completed.append(ids[family])
                 result = _result(job)
-                if result.get("verdict") != "pass" or result.get("findings") != []:
-                    failures.append({"family": family, "result": result or "invalid review result"})
-            elif status in _STOPPED:
-                failures.append({"family": family, "status": status, "error": job.get("error_message")})
+                verdict, findings = result.get("verdict"), result.get("findings", [])
+                if verdict == "pass" and findings == []:
+                    continue
+                if verdict == "fail" and isinstance(findings, list) and findings:
+                    failures.append({"family": family, "result": result})
+                else:
+                    missing_verdict.append({"family": family, "status": "invalid review result"})
+            elif _review_timed_out(job, cutoff):
+                missing_verdict.append({"family": family, "status": status, "error": "review exceeded 24 hours"})
             else:
-                return "awaiting reviews", [], []
+                pending = True
+
+        if missing_verdict:
+            if write:
+                outcomes = json.dumps(missing_verdict + failures, ensure_ascii=False, indent=2)
+                self._send(wp, "escalate", self.program.gate_role,
+                           f"Manual review triage required for {subject}. Required reviewer verdicts are missing. "
+                           f"Leave the PR open for the owner.\n\nReview outcomes\n{outcomes}",
+                           [parent_id, *completed], requires_approval=True)
+            return ("escalated" if write else "ready to escalate review"), [], []
+        if pending:
+            return "awaiting reviews", [], []
         return "", completed, failures
 
     def _next_round(self, wp: Package, round_number: int, depends: list[str], revision: Revision,
@@ -453,13 +487,18 @@ class Harness:
         self._prs.clear()
         statuses = {}
         for wp in self.program.packages.values():
-            build = self._job(self.job_id(wp.id, "build"))
-            if build is None:
-                statuses[wp.id] = self._post_build(wp, write)
-            elif builds_only:
-                statuses[wp.id] = f"build already posted ({build['status']})"
-            else:
-                statuses[wp.id] = self._advance_package(wp, build, write)
+            try:
+                build = self._job(self.job_id(wp.id, "build"))
+                if build is None:
+                    statuses[wp.id] = self._post_build(wp, write)
+                elif builds_only:
+                    statuses[wp.id] = f"build already posted ({build['status']})"
+                else:
+                    statuses[wp.id] = self._advance_package(wp, build, write)
+            except ValueError as exc:
+                if builds_only:
+                    raise
+                statuses[wp.id] = f"blocked: {exc}"
         return statuses
 
     def post(self, dry_run: bool = False) -> dict[str, str]:
