@@ -16,6 +16,14 @@ This reference covers every registered command and group recursively, every posi
 ## Find a command
 
 - [mco advanced](#cli-mco-advanced) — Run any original command, e.g. `bitcadence advanced audit <job-id>`.
+- [mco agentd](#cli-mco-agentd) — The one supervisor that runs every local worker for this user.
+  - [mco agentd logs](#cli-mco-agentd-logs) — Show recent worker output. Uses the separate log-reading token.
+  - [mco agentd reset](#cli-mco-agentd-reset) — Clear a crash-loop and try the worker again now.
+  - [mco agentd restart](#cli-mco-agentd-restart) — Restart a worker.
+  - [mco agentd run](#cli-mco-agentd-run) — Run the supervisor in the foreground. One per user; a second copy exits.
+  - [mco agentd start](#cli-mco-agentd-start) — Start a worker, clearing an earlier manual stop.
+  - [mco agentd status](#cli-mco-agentd-status) — Show the supervisor and every worker it owns.
+  - [mco agentd stop](#cli-mco-agentd-stop) — Stop a worker. It stays stopped, across config edits and restarts, until started.
 - [mco agents](#cli-mco-agents) — List all registered agents and their current online presence status.
 - [mco approve](#cli-mco-approve) — Approve what's waiting for you, one at a time.
 - [mco archive](#cli-mco-archive) — Archive a completed/failed/rejected/cancelled job (reversible).
@@ -44,6 +52,7 @@ This reference covers every registered command and group recursively, every posi
 - [mco fix](#cli-mco-fix) — Find what's wrong and offer to repair it.
 - [mco fleet](#cli-mco-fleet) — Apply declarative per-worker service run modes.
   - [mco fleet apply](#cli-mco-fleet-apply) — Reconcile OS services to ~/.mco/fleet.toml.
+  - [mco fleet migrate](#cli-mco-fleet-migrate) — Preview the move from per-worker services to one supervisor.
   - [mco fleet set](#cli-mco-fleet-set) — Update one worker field in ~/.mco/fleet.toml.
   - [mco fleet status](#cli-mco-fleet-status) — Show configured workers and their installed/running state.
 - [mco gui](#cli-mco-gui) — Open the BitCadence console in your browser.
@@ -162,6 +171,149 @@ All remaining tokens are forwarded, including otherwise unknown options. `bitcad
 
 | Argument / option | Type and requirement | Default | Meaning / constraints |
 |---|---|---|---|
+
+<a id="cli-mco-agentd"></a>
+## `mco agentd`
+
+Alias `bitcadence agentd`.
+
+The one supervisor that runs every local worker for this user.
+
+Example `bitcadence agentd --help`.
+
+Lists the supervisor commands.
+
+Subcommands include [logs](#cli-mco-agentd-logs), [reset](#cli-mco-agentd-reset), [restart](#cli-mco-agentd-restart), [run](#cli-mco-agentd-run), [start](#cli-mco-agentd-start), [status](#cli-mco-agentd-status), [stop](#cli-mco-agentd-stop).
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| <a id="cli-mco-agentd-param-help"></a>`--help` | BOOLEAN, flag, optional | not set | Show this message and exit. |
+
+<a id="cli-mco-agentd-logs"></a>
+## `mco agentd logs`
+
+Alias `bitcadence agentd logs`.
+
+Show recent worker output. Uses the separate log-reading token.
+
+Example `bitcadence agentd logs example-worker --tail 40`.
+
+Reads recent worker logs using the separate log credential. Omit the worker name for the unified log.
+
+Implementation in [src/mco/cli.py](../../src/mco/cli.py#L1924).
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| <a id="cli-mco-agentd-logs-param-worker"></a>`WORKER` (positional) | TEXT, optional | not set | Worker name; omit for every worker. |
+| <a id="cli-mco-agentd-logs-param-tail"></a>`--tail` | INTEGER, optional | `100` | How many lines. |
+| <a id="cli-mco-agentd-logs-param-help"></a>`--help` | BOOLEAN, flag, optional | not set | Show this message and exit. |
+
+<a id="cli-mco-agentd-reset"></a>
+## `mco agentd reset`
+
+Alias `bitcadence agentd reset`.
+
+Clear a crash-loop and try the worker again now.
+
+Example `bitcadence agentd reset example-worker`.
+
+Clears the crash-loop latch and retries a worker whose desired state allows it.
+
+Implementation in [src/mco/cli.py](../../src/mco/cli.py#L1918).
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| <a id="cli-mco-agentd-reset-param-worker"></a>`WORKER` (positional) | TEXT, required | required | Worker name from fleet.toml. |
+| <a id="cli-mco-agentd-reset-param-help"></a>`--help` | BOOLEAN, flag, optional | not set | Show this message and exit. |
+
+<a id="cli-mco-agentd-restart"></a>
+## `mco agentd restart`
+
+Alias `bitcadence agentd restart`.
+
+Restart a worker.
+
+Example `bitcadence agentd restart example-worker`.
+
+Stops the worker and attempts a fresh start.
+
+Implementation in [src/mco/cli.py](../../src/mco/cli.py#L1912).
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| <a id="cli-mco-agentd-restart-param-worker"></a>`WORKER` (positional) | TEXT, required | required | Worker name from fleet.toml. |
+| <a id="cli-mco-agentd-restart-param-help"></a>`--help` | BOOLEAN, flag, optional | not set | Show this message and exit. |
+
+<a id="cli-mco-agentd-run"></a>
+## `mco agentd run`
+
+Alias `bitcadence agentd run`.
+
+Run the supervisor in the foreground. One per user; a second copy exits.
+
+Example `bitcadence agentd run --help`.
+
+Shows launch options. Running without help starts the foreground supervisor for the current user. A duplicate instance exits with code 3.
+
+Implementation in [src/mco/cli.py](../../src/mco/cli.py#L1859).
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| <a id="cli-mco-agentd-run-param-port"></a>`--port` | INTEGER, optional | not set | Control port. Default: this user's own port. |
+| <a id="cli-mco-agentd-run-param-help"></a>`--help` | BOOLEAN, flag, optional | not set | Show this message and exit. |
+
+<a id="cli-mco-agentd-start"></a>
+## `mco agentd start`
+
+Alias `bitcadence agentd start`.
+
+Start a worker, clearing an earlier manual stop.
+
+Example `bitcadence agentd start example-worker`.
+
+Clears the manual stop override and requests a start for an enabled worker.
+
+Implementation in [src/mco/cli.py](../../src/mco/cli.py#L1900).
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| <a id="cli-mco-agentd-start-param-worker"></a>`WORKER` (positional) | TEXT, required | required | Worker name from fleet.toml. |
+| <a id="cli-mco-agentd-start-param-help"></a>`--help` | BOOLEAN, flag, optional | not set | Show this message and exit. |
+
+<a id="cli-mco-agentd-status"></a>
+## `mco agentd status`
+
+Alias `bitcadence agentd status`.
+
+Show the supervisor and every worker it owns.
+
+Example `bitcadence agentd status`.
+
+Shows supervisor status and lists the workers with their desired state, PID, restart count, and latest error.
+
+Implementation in [src/mco/cli.py](../../src/mco/cli.py#L1869).
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| <a id="cli-mco-agentd-status-param-help"></a>`--help` | BOOLEAN, flag, optional | not set | Show this message and exit. |
+
+<a id="cli-mco-agentd-stop"></a>
+## `mco agentd stop`
+
+Alias `bitcadence agentd stop`.
+
+Stop a worker. It stays stopped, across config edits and restarts, until started.
+
+Example `bitcadence agentd stop example-worker`.
+
+Stops the worker and persists a manual stop override across reconciliation and supervisor restarts.
+
+Implementation in [src/mco/cli.py](../../src/mco/cli.py#L1906).
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| <a id="cli-mco-agentd-stop-param-worker"></a>`WORKER` (positional) | TEXT, required | required | Worker name from fleet.toml. |
+| <a id="cli-mco-agentd-stop-param-help"></a>`--help` | BOOLEAN, flag, optional | not set | Show this message and exit. |
 
 <a id="cli-mco-agents"></a>
 ## `mco agents`
@@ -658,7 +810,7 @@ Apply declarative per-worker service run modes.
 
 Safe example: `bitcadence fleet --help`. Expected result: list the following subcommands and group options. Select a child command for its operation and recovery instructions.
 
-Subcommands: [apply](#cli-mco-fleet-apply), [set](#cli-mco-fleet-set), [status](#cli-mco-fleet-status).
+Subcommands: [apply](#cli-mco-fleet-apply), [migrate](#cli-mco-fleet-migrate), [set](#cli-mco-fleet-set), [status](#cli-mco-fleet-status).
 
 Global/group options: [mco](#cli-mco).
 
@@ -682,6 +834,28 @@ Implementation: [src/mco/cli.py:1645](../../src/mco/cli.py#L1645). Global/group 
 | Argument / option | Type and requirement | Default | Meaning / constraints |
 |---|---|---|---|
 | <a id="cli-mco-fleet-apply-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-fleet-migrate"></a>
+## `mco fleet migrate`
+
+Alias `bitcadence fleet migrate`.
+
+Plan the move from one OS service per worker to one supervisor.
+
+Lists every legacy per-worker service, under the current and the older
+brand names, and what a migration would do with each. Changes nothing.
+
+Example `bitcadence fleet migrate --dry-run`.
+
+Lists legacy services and the proposed migration steps. This command makes no changes. Applying the migration is unavailable and exits with code 2.
+
+Implementation in [src/mco/cli.py](../../src/mco/cli.py#L1756).
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| <a id="cli-mco-fleet-migrate-param-dry-run"></a>`--dry-run`, `--no-dry-run` | BOOLEAN, flag, optional | `true` | Show the plan and change nothing (the default). |
+| <a id="cli-mco-fleet-migrate-param-apply"></a>`--apply` | BOOLEAN, flag, optional | `false` | Carry the plan out. Not available in this build. |
+| <a id="cli-mco-fleet-migrate-param-help"></a>`--help` | BOOLEAN, flag, optional | not set | Show this message and exit. |
 
 <a id="cli-mco-fleet-set"></a>
 ## `mco fleet set`
