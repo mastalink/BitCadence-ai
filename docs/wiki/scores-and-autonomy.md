@@ -97,15 +97,19 @@ python -m mco.orchestrator.score_conductor retry-validation `
 Use the run's original database and artifact root. A successful invocation
 validates existing completions. Advance new work with the normal tick or sweep.
 
-Recovery requires a read-only audit run blocked solely by the exact envelope
-error. It preflights original owner credential, authenticated completion events,
-all existing completed evidence, independent reviewers, exact passing review
-bindings, and unexpired active dispatch deadlines. Rejected/failed jobs or
-reviews, other blocking causes, repository-write capabilities, missing events,
-or modified previously validated evidence refuse recovery without reopening the
-run. It never extends deadlines, issues authority, replaces results, or
-redispatches completed reviewers. In particular, **an expired deadline cannot be
-recovered with this command**, even if the connector-envelope repair is valid.
+Repository-write runs can use `tick --retry-blocked` after the underlying
+validation issue is corrected. That path revalidates the original result
+against the normal repository-write and authority checks.
+
+The one-time audit retry above requires a read-only run blocked solely by the
+exact envelope error. Preflight checks the original owner credential,
+authenticated completion events, existing completed evidence, independent
+reviewers, exact passing review bindings, and unexpired active dispatch
+deadlines. Rejected or failed jobs or reviews, other blocking causes, missing
+events, and changes to previously validated evidence block this retry. It never
+extends deadlines, issues authority, replaces results, or redispatches
+completed reviewers. **An expired deadline cannot be recovered with this
+command**, even after a connector-envelope repair.
 
 One durable `validation_retry` event records the owner, Organization, Score
 digest, original blocking event sequence IDs, completed submitted job IDs, and

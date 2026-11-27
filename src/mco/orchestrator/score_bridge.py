@@ -7,6 +7,7 @@ without one, checkpointed tasks wait rather than self-authorize.
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import sqlite3
@@ -44,10 +45,23 @@ def encoded(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
+def _is_read_only_audit(score):
+    audit_caps = {"cloud:inspect", "repository:read", "evidence:write", "evidence:review"}
+    return not score["budget_cents"] and all(
+        set(task["capabilities"]) <= audit_caps and not task["max_cost_cents"] for task in score["tasks"]
+    )
+
+
 def strict_result(output_payload):
     """Decode either connector envelope without repairing or extracting prose."""
     def reject_constant(value):
         raise ValueError(f"Non-JSON constant: {value}")
+
+    def finite_float(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("JSON number overflows a finite float")
+        return number
 
     def unique_object(pairs):
         result = {}
@@ -61,8 +75,9 @@ def strict_result(output_payload):
         raw = output_payload if isinstance(output_payload, str) else output_payload["result"]
         if not isinstance(raw, str):
             raise TypeError("Result must be JSON text")
-        output = json.loads(raw, parse_constant=reject_constant, object_pairs_hook=unique_object)
-    except (KeyError, TypeError, ValueError) as exc:
+        output = json.loads(raw, parse_constant=reject_constant, parse_float=finite_float,
+                            object_pairs_hook=unique_object)
+    except (KeyError, TypeError, ValueError, RecursionError) as exc:
         raise ScoreError("Strict JSON result required") from exc
     if not isinstance(output, dict):
         raise ScoreError("JSON result must be an object")
@@ -701,7 +716,8 @@ class ScoreBridge:
                 "'gate_rejected','run_blocked','adapter_failed','rejected') ORDER BY seq DESC LIMIT 1",
                 (run_id,),
             ).fetchone()
-            if (last_block is not None and last_block["event"] == "validation_blocked"
+            if (_is_read_only_audit(json.loads(run["definition"]))
+                    and last_block is not None and last_block["event"] == "validation_blocked"
                     and json.loads(last_block["detail"]).get("reason") == "Strict JSON result required"):
                 raise ScoreError("Use the explicit retry-validation command for a result envelope block")
             overdue = [(r[0], r[1]) for r in db.execute(
@@ -765,69 +781,75 @@ class ScoreBridge:
             raise ScoreError("Review not bound to exact evidence")
         return output
 
-    def retry_validation(self, run_id, board):
-        """One explicit, owner-authenticated retry of an audit envelope block.
+    def _validation_retry_snapshot(self, db, run_id, board):
+        run = self.run(db, run_id)
+        self.identity(run, board)
+        if db.execute("SELECT 1 FROM events WHERE run=? AND event='validation_retry'", (run_id,)).fetchone():
+            raise ScoreError("Validation retry budget exhausted")
+        if run["status"] != "blocked":
+            raise ScoreError("Validation retry requires a blocked run")
+        score = json.loads(run["definition"])
+        if not _is_read_only_audit(score):
+            raise ScoreError("Validation retry supports only read-only audit runs")
+        blockers = [dict(r) for r in db.execute(
+            "SELECT seq,event,detail FROM events WHERE run=? AND event IN "
+            "('validation_blocked','tick_blocked','deadline_exceeded','job_blocked','gate_rejected','run_blocked','adapter_failed','rejected') ORDER BY seq", (run_id,))]
+        if not blockers or any(r["event"] != "validation_blocked" or json.loads(r["detail"]).get("reason") != "Strict JSON result required" for r in blockers):
+            raise ScoreError("Run must be blocked solely on Strict JSON result required")
+        rows = [dict(r) for r in db.execute("SELECT * FROM dispatch WHERE run=? ORDER BY task,phase", (run_id,))]
+        if any(r["status"] in ("rejected", "failed", "cancelled", "halted") for r in rows):
+            raise ScoreError("Rejected or failed dispatch cannot be retried")
+        active = [r for r in rows if r["status"] in ("planned", "sending", "submitted")]
+        if any(r["deadline"] <= int(self.clock()) for r in active):
+            raise ScoreError("Validation retry cannot extend expired deadlines")
+        binding = db.execute("SELECT grant_id FROM standing_authority WHERE run=?", (run_id,)).fetchone()
+        return run, score, blockers, rows, active, binding["grant_id"] if binding else None
 
-        Preflight and reopening are serialized. No dispatch, deadline extension,
-        job/result rewriting, reauthorization, or automatic retry is permitted.
-        """
+    def retry_validation(self, run_id, board):
+        """One owner-authenticated retry of an audit envelope block."""
         with self.tx() as db:
-            run = self.run(db, run_id)
-            self.identity(run, board)
-            if db.execute("SELECT 1 FROM events WHERE run=? AND event='validation_retry'", (run_id,)).fetchone():
-                raise ScoreError("Validation retry budget exhausted")
-            if run["status"] != "blocked":
-                raise ScoreError("Validation retry requires a blocked run")
-            score = json.loads(run["definition"])
-            audit_caps = {"cloud:inspect", "repository:read", "evidence:write", "evidence:review"}
-            if score["budget_cents"] or any(set(t["capabilities"]) - audit_caps or t["max_cost_cents"] for t in score["tasks"]):
-                raise ScoreError("Validation retry supports only read-only audit runs")
-            blockers = [dict(r) for r in db.execute(
-                "SELECT seq,event,detail FROM events WHERE run=? AND event IN "
-                "('validation_blocked','tick_blocked','deadline_exceeded','job_blocked','gate_rejected','run_blocked','adapter_failed','rejected') ORDER BY seq", (run_id,))]
-            if not blockers or any(r["event"] != "validation_blocked" or json.loads(r["detail"]).get("reason") != "Strict JSON result required" for r in blockers):
-                raise ScoreError("Run must be blocked solely on Strict JSON result required")
-            rows = [dict(r) for r in db.execute("SELECT * FROM dispatch WHERE run=? ORDER BY task,phase", (run_id,))]
-            if any(r["status"] in ("rejected", "failed", "cancelled", "halted") for r in rows):
-                raise ScoreError("Rejected or failed dispatch cannot be retried")
-            active = [r for r in rows if r["status"] in ("planned", "sending", "submitted")]
-            if any(r["deadline"] <= int(self.clock()) for r in active):
-                raise ScoreError("Validation retry cannot extend expired deadlines")
-            binding = db.execute("SELECT grant_id FROM standing_authority WHERE run=?", (run_id,)).fetchone()
-            if binding:
-                self._check_standing_score(score, run["org"], run_id, binding["grant_id"])
-            completed = []
-            for row in rows:
-                if row["status"] not in ("submitted", "validated", "accepted"):
-                    continue
-                job = board.get(row["job_id"])
-                self.validate_job(run, row, job)
-                if job.get("status") in ("failed", "rejected", "cancelled", "halted"):
-                    raise ScoreError("Rejected or failed job cannot be retried")
-                if job.get("status") != "completed":
-                    if row["status"] != "submitted":
-                        raise ScoreError("Previously validated job is no longer completed")
-                    continue
+            snapshot = self._validation_retry_snapshot(db, run_id, board)
+        # Gateway and artifact reads may be slow. Recheck the snapshot under
+        # the write lock before consuming the retry or reopening the run.
+        run, score, blockers, rows, active, grant_id = snapshot
+        if grant_id:
+            self._check_standing_score(score, run["org"], run_id, grant_id)
+        completed = []
+        completed_reviews = []
+        for row in rows:
+            if row["status"] not in ("submitted", "validated", "accepted"):
+                continue
+            job = board.get(row["job_id"])
+            self.validate_job(run, row, job)
+            if job.get("status") in ("failed", "rejected", "cancelled", "halted"):
+                raise ScoreError("Rejected or failed job cannot be retried")
+            if job.get("status") != "completed":
+                if row["status"] != "submitted":
+                    raise ScoreError("Previously validated job is no longer completed")
+                continue
+            output = self.completion_result(row, job, board)
+            contract = json.loads(row["payload"])["input_payload"]["score"]
+            if row["phase"] == "work":
+                evidence = self.artifacts(output.get("artifacts"), contract["required_evidence"])
+                if row["status"] == "validated" and evidence != json.loads(row["evidence"]):
+                    raise ScoreError("Previously validated evidence changed")
+            else:
+                completed_reviews.append(row)
+                evidence = self.artifacts(contract["review_of"], contract["required_evidence"])
+                if self._review_result(output, evidence)["verdict"] != "pass":
+                    raise ScoreError("Rejected or unbound review cannot be retried")
+                if row["status"] == "accepted" and evidence != json.loads(row["evidence"]):
+                    raise ScoreError("Previously accepted review evidence changed")
+            if row["status"] == "submitted":
+                completed.append(row["job_id"])
+        if not completed:
+            raise ScoreError("Validation retry requires completed submitted evidence")
+        with self.tx() as db:
+            current = self._validation_retry_snapshot(db, run_id, board)
+            if current != snapshot:
+                raise ScoreError("Run or dispatch changed during validation retry preflight")
+            for row in completed_reviews:
                 self.independent_review(db, run_id, row)
-                output = self.completion_result(row, job, board)
-                contract = json.loads(row["payload"])["input_payload"]["score"]
-                if row["phase"] == "work":
-                    evidence = self.artifacts(output.get("artifacts"), contract["required_evidence"])
-                    if row["status"] == "validated" and evidence != json.loads(row["evidence"]):
-                        raise ScoreError("Previously validated evidence changed")
-                else:
-                    evidence = self.artifacts(contract["review_of"], contract["required_evidence"])
-                    if self._review_result(output, evidence)["verdict"] != "pass":
-                        raise ScoreError("Rejected or unbound review cannot be retried")
-                    if row["status"] == "accepted" and evidence != json.loads(row["evidence"]):
-                        raise ScoreError("Previously accepted review evidence changed")
-                if row["status"] == "submitted":
-                    completed.append(row["job_id"])
-            if not completed:
-                raise ScoreError("Validation retry requires completed submitted evidence")
-            self.identity(run, board)
-            if any(r["deadline"] <= int(self.clock()) for r in active):
-                raise ScoreError("Validation retry cannot extend expired deadlines")
             self.event(db, run_id, "validation_retry", {
                 "principal": run["principal"], "org": run["org"], "digest": run["digest"],
                 "attempt": 1, "blocked_events": [r["seq"] for r in blockers], "jobs": completed,

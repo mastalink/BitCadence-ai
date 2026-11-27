@@ -1133,3 +1133,65 @@ def test_retry_poll_reblocks_if_evidence_changes_after_preflight(setup):
     with pytest.raises(ScoreError, match="exhausted"):
         b.retry_validation("run", g)
     assert reads == 2  # bounded; no automatic retries
+
+
+def test_repo_write_envelope_block_can_use_generic_resume(setup):
+    b, g, _ = setup
+    completed_phase(setup, "work")
+    historical_envelope_block(b)
+    with b.tx() as db:
+        definition = json.loads(b.run(db, "run")["definition"])
+        definition["tasks"][0]["capabilities"] = ["repository:write"]
+        db.execute("UPDATE runs SET definition=? WHERE id='run'", (json.dumps(definition),))
+    original = copy.deepcopy(g.jobs)
+    assert b.resume("run", g)
+    assert b.status("run")["status"] == "running"
+    assert g.jobs == original
+
+
+def test_retry_does_not_hold_sqlite_write_lock_during_board_reads(setup):
+    import sqlite3
+    b, g, _ = setup
+    completed_phase(setup, "work")
+    historical_envelope_block(b)
+
+    def verify_writes_can_proceed(wrapped):
+        def read(job_id):
+            with sqlite3.connect(b.database, timeout=0) as other:
+                other.execute("BEGIN IMMEDIATE")
+            return wrapped(job_id)
+        return read
+
+    g.get = verify_writes_can_proceed(g.get)
+    g.events = verify_writes_can_proceed(g.events)
+    b.retry_validation("run", g)
+    assert b.status("run")["status"] == "running"
+
+
+def test_retry_refuses_dispatch_mutation_during_preflight(setup):
+    b, g, _ = setup
+    completed_phase(setup, "work")
+    historical_envelope_block(b)
+    original_events = g.events
+
+    def events(job_id):
+        import sqlite3
+        with sqlite3.connect(b.database, timeout=0) as other:
+            other.execute("UPDATE dispatch SET deadline=deadline+1 WHERE job_id=?", (job_id,))
+        return original_events(job_id)
+
+    g.events = events
+    with pytest.raises(ScoreError, match="changed during"):
+        b.retry_validation("run", g)
+    assert b.status("run")["status"] == "blocked"
+    assert not any(e["event"] == "validation_retry" for e in b.status("run")["events"])
+
+
+@pytest.mark.parametrize("raw", ["[" * 100000, '{"overflow": 1e999}'], ids=["nesting", "overflow"])
+def test_excessive_nesting_and_float_overflow_block_durably(setup, raw):
+    b, g, _ = setup
+    job = completed_phase(setup, "work")
+    g.jobs[job]["output_payload"] = raw
+    with pytest.raises(ScoreError, match="Strict JSON result required"):
+        b.poll("run", g)
+    assert b.status("run")["status"] == "blocked"
