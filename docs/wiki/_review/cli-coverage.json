@@ -6385,7 +6385,7 @@
       "anchor": "cli-mco-runtime-install-bootstrap",
       "group": false,
       "hidden": false,
-      "help": "Register the current user's Windows sign-in task and export its XML.",
+      "help": "Register the current user's Windows sign-in task and export its XML as UTF-16.",
       "source": "src/mco/runtime/cli.py",
       "line": 74,
       "inherited_groups": [
@@ -6406,7 +6406,7 @@
           "nargs": 1,
           "is_flag": false,
           "hidden": false,
-          "help": "Output path for the exported Scheduled Task XML.",
+          "help": "Output path for the UTF-16 Scheduled Task XML.",
           "prompt": null,
           "envvar": null,
           "choices": null,

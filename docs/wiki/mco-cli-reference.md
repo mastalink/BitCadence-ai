@@ -87,7 +87,7 @@ This reference covers every registered command and group recursively, every posi
 - [mco review](#cli-mco-review) — Send work to independent reviewers from different model families.
   - [mco review fanout](#cli-mco-review-fanout) — Post one review job per model family (Codex/GPT, Gemini/Antigravity, ...), skipping the builder's.
 - [mco runtime](#cli-mco-runtime) — The background runtime that owns the gateway, the scheduler and the workers.
-  - [mco runtime install-bootstrap](#cli-mco-runtime-install-bootstrap) — Registers the Windows sign-in task and exports its XML.
+  - [mco runtime install-bootstrap](#cli-mco-runtime-install-bootstrap) — Registers the Windows sign-in task and exports its XML as UTF-16.
   - [mco runtime maintenance](#cli-mco-runtime-maintenance) — Maintenance mode: the runtime stays up, its children are stopped and schedules are held.
   - [mco runtime rollback](#cli-mco-runtime-rollback) — Restore the previous last-known-good fleet configuration.
   - [mco runtime run](#cli-mco-runtime-run) — Run the runtime in the foreground. Exit 0 only after a deliberate stop; non-zero means it crashed.
@@ -1458,7 +1458,7 @@ Implementation: [src/mco/runtime/cli.py:16](../../src/mco/runtime/cli.py#L16). G
 <a id="cli-mco-runtime-install-bootstrap"></a>
 ## `mco runtime install-bootstrap`
 
-Register the current user's Windows sign-in task and export its XML.
+Register the current user's Windows sign-in task and export its XML as UTF-16.
 
 Run `bitcadence runtime install-bootstrap` from the account that will run the runtime.
 
@@ -1470,7 +1470,7 @@ See the [install command implementation](../../src/mco/runtime/cli.py#L74).
 
 | Argument / option | Type and requirement | Default | Meaning |
 |---|---|---|---|
-| <a id="cli-mco-runtime-install-bootstrap-param-xml"></a>`--xml` | PATH; optional | `~/.mco/runtime/bootstrap.xml` | Output path for the exported Scheduled Task XML. |
+| <a id="cli-mco-runtime-install-bootstrap-param-xml"></a>`--xml` | PATH; optional | `~/.mco/runtime/bootstrap.xml` | Output path for the UTF-16 Scheduled Task XML. |
 | <a id="cli-mco-runtime-install-bootstrap-param-help"></a>`--help` | BOOLEAN; flag; optional | unset | Show this message and exit. |
 
 <a id="cli-mco-runtime-maintenance"></a>
