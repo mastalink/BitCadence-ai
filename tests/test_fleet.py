@@ -284,3 +284,86 @@ def test_disabled_workers_are_not_flagged(tmp_path, monkeypatch):
         "workers": {"c": {"role": "claude", "instance": "idle", "mode": "off"}}
     })
     assert missing_agent_tokens(workers) == []
+
+
+def test_pane_mode_removes_both_os_services_and_installs_none(tmp_path, monkeypatch):
+    """mode=pane: the cockpit runs the waker, so no Scheduled Task may run it too."""
+    config = _write(
+        tmp_path / "fleet.toml",
+        """
+[workers.worker-a]
+role = "codex"
+instance = "worker-a"
+mode = "pane"
+exec = "codex-run.cmd"
+""",
+    )
+    installed = {"BitCadence-wake-codex-worker-a", "BitCadence-poll-codex-worker-a"}
+    calls = []
+    monkeypatch.setattr(
+        fleet.service,
+        "list_status",
+        lambda: [{"name": name, "installed": True, "running": True} for name in sorted(installed)],
+    )
+
+    def fake_uninstall(name):
+        calls.append(("uninstall", name))
+        installed.discard(name)
+        return True, f"removed {name}"
+
+    monkeypatch.setattr(fleet.service, "uninstall", fake_uninstall)
+    monkeypatch.setattr(fleet.service, "install_waker", lambda *a, **k: calls.append(("waker",)) or (True, ""))
+    monkeypatch.setattr(fleet.service, "install_poll", lambda *a, **k: calls.append(("poll",)) or (True, ""))
+    monkeypatch.setattr(fleet, "missing_agent_tokens", lambda workers: [])
+    from mco import cockpit
+    monkeypatch.setattr(cockpit, "load_cockpit", lambda *a, **k: cockpit.CockpitConfig())
+    monkeypatch.setattr(cockpit, "find_herdr", lambda configured=None: "herdr.exe")
+
+    summaries = fleet.apply_fleet(config)
+
+    assert ("waker",) not in calls and ("poll",) not in calls
+    assert not installed
+    assert any("worker-a: pane" in line for line in summaries)
+
+
+def test_pane_mode_without_herdr_is_refused_before_anything_is_uninstalled(tmp_path, monkeypatch):
+    """Pane mode removes the OS services; with no herdr the worker would have no runner at all."""
+    config = _write(tmp_path / "fleet.toml",
+                    '[workers.worker-a]\nrole = "codex"\ninstance = "worker-a"\nmode = "pane"\nexec = "run.cmd"\n')
+    calls = []
+    monkeypatch.setattr(fleet.service, "list_status",
+                        lambda: [{"name": "BitCadence-wake-codex-worker-a", "installed": True, "running": True}])
+    monkeypatch.setattr(fleet.service, "uninstall", lambda name: calls.append(name) or (True, ""))
+    monkeypatch.setattr(fleet, "missing_agent_tokens", lambda workers: [])
+    from mco import cockpit
+    monkeypatch.setattr(cockpit, "load_cockpit", lambda *a, **k: cockpit.CockpitConfig())
+    monkeypatch.setattr(cockpit, "find_herdr", lambda configured=None: None)
+
+    with pytest.raises(fleet.FleetConfigError, match="herdr is not installed"):
+        fleet.apply_fleet(config)
+    assert calls == []
+
+
+def test_pane_label_collision_is_refused_before_anything_is_uninstalled(tmp_path, monkeypatch):
+    """A cockpit.toml pane with the worker's name would make `cockpit up` fail after the services are gone."""
+    config = _write(tmp_path / "fleet.toml",
+                    '[workers.worker-a]\nrole = "codex"\ninstance = "worker-a"\nmode = "pane"\nexec = "run.cmd"\n')
+    calls = []
+    monkeypatch.setattr(fleet.service, "list_status",
+                        lambda: [{"name": "BitCadence-wake-codex-worker-a", "installed": True, "running": True}])
+    monkeypatch.setattr(fleet.service, "uninstall", lambda name: calls.append(name) or (True, ""))
+    monkeypatch.setattr(fleet, "missing_agent_tokens", lambda workers: [])
+    from mco import cockpit
+    clash = cockpit.CockpitConfig(panes=[cockpit.PaneSpec(workspace="w", label="worker-a", command="echo hi")])
+    monkeypatch.setattr(cockpit, "load_cockpit", lambda *a, **k: clash)
+    monkeypatch.setattr(cockpit, "find_herdr", lambda configured=None: "herdr.exe")
+
+    with pytest.raises(fleet.FleetConfigError, match="declared in both"):
+        fleet.apply_fleet(config)
+    assert calls == []
+
+
+def test_pane_mode_requires_exec(tmp_path):
+    config = _write(tmp_path / "fleet.toml", '[workers.x]\nrole = "codex"\nmode = "pane"\n')
+    with pytest.raises(fleet.FleetConfigError, match="exec is required"):
+        fleet.load_fleet(config)

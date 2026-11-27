@@ -1,0 +1,478 @@
+# BitCadence build DAG - read by `bitcadence handoff` (package H-00).
+# Design: docs/architecture/DECISIONS.md, docs/adr/0004-*.md, docs/adr/0005-*.md.
+#
+# Repos are logical names. "bitcadence" is this public repository (invariant 13: neutral content only).
+# "private-content" and any other private repo resolve through private deployment configuration
+# (~/.mco/deployment/repos.toml); their paths never appear here.
+#
+# activation = true marks a package whose *production activation* is gated by evidence + owner sign-off. Completing
+# the code is not enough; the harness stops at an approval job after the evidence is attached.
+# reviewers: model families asked to review (never the builder's family); min_families is enforced by the harness.
+
+[program]
+name = "runtime-desktop-plugins"
+namespace = "8b3c1f0e-5d0a-4c7e-9b1e-2f6a4d8c9e10"      # uuid5 namespace for deterministic job ids
+builder = { role = "codex", family = "gpt" }            # instance pinned in private config
+merge_gate = { role = "light", requires_approval = true }
+default_reviewers = ["claude", "gemini"]
+min_families = 2
+max_fix_rounds = 3
+commands = { py = "python -m pytest -q -o addopts=", rust = "cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace", ui = "pnpm install --frozen-lockfile && pnpm typecheck && pnpm test && pnpm build", neutral = "python scripts/check_neutrality.py --diff origin/main", popup = "pwsh -File <popup-watch> -Seconds 60   # deployment tool; path from private config" }
+
+# ----------------------------------------------------------------------------------------------- N: neutrality
+[[wp]]
+id = "N-01"
+title = "Neutrality guard, exposure audit, neutralize current tracked debt"
+stage = "N"
+repo = "bitcadence"
+depends = []
+scope = ["scripts/check_neutrality.py (diff + full modes, private denylist)", "CI pull-request job", "replace deployment-specific names/paths in tracked files with synthetic names or config lookups", "move deployment runbooks to a private repo (owner names the target)"]
+non_goals = ["rewriting git history (owner decision)", "changing behaviour"]
+acceptance = ["{py} tests/test_check_neutrality.py", "python scripts/check_neutrality.py --all  (with the private denylist) reports 0 deployment terms outside an owner-approved allowlist", "{py}  (full suite green)"]
+evidence = ["before/after --all --summary counts", "private exposure report updated"]
+fault_injection = ["a PR adding a user-profile path fails CI", "a reviewed line with 'neutrality: allow' passes"]
+reviewers = ["claude", "gemini"]
+risk = "low"
+rollback = "revert commit"
+size = "L"
+
+[[wp]]
+id = "N-02"
+title = "Land the neutralized cockpit branch (optional herdr host, review fan-out)"
+stage = "N"
+repo = "bitcadence"
+depends = ["N-01"]
+scope = ["merge feat/cockpit-herdr after review: config-only herdr location, role-only default review panel, generic ADR 0003"]
+non_goals = ["runtime integration (R0-02)"]
+acceptance = ["{py} tests/test_cockpit.py tests/test_reviews.py tests/test_fleet.py", "{neutral}"]
+evidence = ["review verdicts from 2 families"]
+fault_injection = ["herdr absent -> clear error, no fallback path"]
+reviewers = ["claude", "gemini"]
+risk = "low"
+rollback = "revert merge"
+size = "S"
+
+# ----------------------------------------------------------------------------------------------- H: harness
+[[wp]]
+id = "H-00"
+title = "Handoff harness: post/advance/status/watch for this DAG"
+stage = "H"
+repo = "bitcadence"
+depends = []
+scope = ["src/mco/handoff.py + CLI", "client.send(job_id=...)", "reviews.fanout(depends_on, job_ids)", "deterministic uuid5 ids", "build -> PR -> fan-out review -> fix rounds -> approval-gated merge -> next", "watch loop as a runtime/cockpit process, never an OS task"]
+non_goals = ["merging without owner approval", "posting a dependency that does not exist yet"]
+acceptance = ["{py} tests/test_handoff.py tests/test_reviews.py", "bitcadence handoff post --program docs/plan/packages.toml --dry-run prints the first ready packages", "posting twice is a no-op (test)"]
+evidence = ["advance tests with fake gh + fake client"]
+fault_injection = ["review fails -> fix round; 4th failure -> escalation", "checks red -> no merge job", "harness restart mid-round -> no duplicate jobs"]
+reviewers = ["claude", "gemini"]
+risk = "medium"
+rollback = "cancel the program's open jobs; revert"
+size = "M"
+
+# ----------------------------------------------------------------------------------------------- R0: reliable runtime
+[[wp]]
+id = "R0-01"
+title = "agentd Windows capability assessment (bounded spike, 1 day)"
+stage = "R0"
+repo = "bitcadence"
+depends = []
+scope = ["executable checks in an isolated home: windowless child+grandchild, Job Object kills grandchildren, identity-checked reap, crash loop + cooldown, log drain under flood, graceful break then deadline kill, reconcile on edit, restart re-adopts nothing stale, 2 h run of one real worker + gateway with equivalent board presence"]
+non_goals = ["fixing gaps (R0-02)", "touching the live fleet"]
+acceptance = ["python scripts/assess_agentd.py (isolated home by design) exits 0 and writes an evidence table", "DECISIONS.md section 5 updated with the verdict"]
+evidence = ["evidence table", "popup-watch log"]
+fault_injection = ["kill the supervisor -> no orphans", "flooding child -> no deadlock"]
+reviewers = ["claude", "grok"]
+risk = "low"
+rollback = "n/a (read-only spike)"
+size = "S"
+
+[[wp]]
+id = "R0-02"
+title = "Runtime entry point and lifecycle"
+stage = "R0"
+repo = "bitcadence"
+depends = ["R0-01"]
+scope = ["src/mco/runtime/: run/stop/status/maintenance/rollback", "exit-code semantics", "heartbeat file", "STOP quiesce", "gateway + scheduler as children", "last-known-good generations", "AGENT_INSTANCE_ID always set", "control API: /v1/runtime"]
+non_goals = ["plugins (R2-01)", "OS registration (R0-03)"]
+acceptance = ["{py} tests/test_runtime_*.py tests/test_agentd_*.py"]
+evidence = ["lifecycle table reproduced by tests"]
+fault_injection = ["kill gateway -> restarted", "corrupt fleet.toml -> LKG kept", "STOP -> no spawns, no exit", "deliberate stop -> exit 0", "kill runtime -> no orphan children"]
+reviewers = ["claude", "gemini", "grok"]
+risk = "medium"
+rollback = "revert; nothing is activated by this package"
+size = "M"
+
+[[wp]]
+id = "R0-03"
+title = "Single bootstrap and desktop decoupling"
+stage = "R0"
+repo = "bitcadence"
+depends = ["R0-02"]
+scope = ["runtime install-bootstrap / uninstall-bootstrap (per-user task: at sign-in, restart on failure, ignore new, windowless)", "export task XML", "existing desktop tool stops supervising in-process; becomes a /v1 client (observer when the runtime runs)"]
+non_goals = ["migrating existing workloads (R0-05, R2-06)"]
+acceptance = ["{py} tests/test_bootstrap.py tests/test_desktop_controller.py", "isolated live check: crash -> restarted within 1 min; runtime stop -> stays stopped; second start -> refused"]
+evidence = ["exported task XML", "live check log"]
+fault_injection = ["crash x3 -> restarted each time", "deliberate stop -> not restarted", "reboot -> up after sign-in"]
+reviewers = ["claude", "grok", "gemini"]
+risk = "medium"
+rollback = "uninstall-bootstrap"
+size = "M"
+
+[[wp]]
+id = "R0-04"
+title = "External watchdog (generic; deployment config private)"
+stage = "R0"
+repo = "bitcadence"
+depends = ["R0-02"]
+scope = ["ops/watchdog/: heartbeat age, runtime state, recovery-failed checks; configurable notification transport; private config file"]
+non_goals = ["auto-recovery beyond re-running the bootstrap when state allows"]
+acceptance = ["{py} ops/watchdog/tests", "drill --dry-run"]
+evidence = ["drill output"]
+fault_injection = ["deliberate stop -> no alert", "4 crashes -> recovery-failed alert", "stale heartbeat -> alert"]
+reviewers = ["claude", "gemini"]
+risk = "low"
+rollback = "disable the watchdog check"
+size = "M"
+
+[[wp]]
+id = "R0-05"
+title = "Runtime activation on the primary node"
+stage = "R0"
+repo = "bitcadence"
+depends = ["R0-03", "R0-04"]
+activation = true
+scope = ["install bootstrap; move gateway + one low-risk worker; observe 24 h; then remaining workers one at a time with idle check, disable-before-start, verify, keep XML"]
+non_goals = ["watchers, portals, job tasks (R2-06)"]
+acceptance = ["24 h popup-watch: zero console windows", "board presence equivalent for every moved worker", "watchdog green"]
+evidence = ["per-worker equivalence record", "popup-watch log", "exported task XML set"]
+fault_injection = ["rollback rehearsed once on one worker"]
+reviewers = ["claude"]
+risk = "high"
+rollback = "per worker: stop in runtime, re-enable exported task"
+size = "S"
+
+# ----------------------------------------------------------------------------------------------- R1: desktop
+[[wp]]
+id = "R1-01"
+title = "Desktop scaffold (Tauri 2 + React/TS), CI, capability lock-down, self-test"
+stage = "R1"
+repo = "bitcadence"
+depends = ["R0-02"]
+scope = ["desktop/ workspace", "CI desktop.yml (windows)", "minimal capabilities, strict CSP, isolation", "--self-test with first-paint timing"]
+non_goals = ["any supervision"]
+acceptance = ["{rust}", "{ui}", "tauri build --no-bundle", "--self-test exits 0", "{popup}"]
+evidence = ["self-test JSON"]
+fault_injection = ["runtime absent -> desktop shows offline state, does not start anything"]
+reviewers = ["claude", "gemini"]
+risk = "low"
+rollback = "revert"
+size = "M"
+
+[[wp]]
+id = "R1-02"
+title = "Gateway bridge, runtime client, desktop enrollment"
+stage = "R1"
+repo = "bitcadence"
+depends = ["R1-01"]
+scope = ["bcd-gateway (method+path allowlist, websocket, credential store)", "bcd-runtime-client (/v1)", "bitcadence desktop enroll --json (scoped identity; refuses a terminal stdout)"]
+non_goals = ["sign-in flows inside the webview"]
+acceptance = ["{rust}", "{py} tests/test_desktop_enroll.py", "no bearer construction or loopback URL in built UI assets"]
+evidence = ["allowlist test report"]
+fault_injection = ["denied route -> refused", "token rotation -> reconnect"]
+reviewers = ["claude", "gemini", "grok"]
+risk = "medium"
+rollback = "revert; revoke the desktop identity"
+size = "M"
+
+[[wp]]
+id = "R1-03"
+title = "Design system and shell"
+stage = "R1"
+repo = "bitcadence"
+depends = ["R1-01"]
+scope = ["brand tokens + fonts", "light/dark", "plain/expert tone", "command palette", "notifications", "deep links", "tray"]
+non_goals = ["screen content"]
+acceptance = ["{ui}", "axe: no serious/critical at 1280 and 390, light and dark", "accent-colour lint"]
+evidence = ["visual snapshots"]
+fault_injection = []
+reviewers = ["gemini", "claude"]
+risk = "low"
+rollback = "revert"
+size = "M"
+
+[[wp]]
+id = "R1-04"
+title = "Core screens port (Now, Jobs, Approvals, Activity) + web build"
+stage = "R1"
+repo = "bitcadence"
+depends = ["R1-02", "R1-03"]
+scope = ["console sources -> ES modules", "one UI, two transports (IPC, web)", "gateway serves the web build at /app", "fix the score autonomy status URL mismatch"]
+non_goals = ["retiring the legacy console (R4-01)"]
+acceptance = ["{ui}", "playwright (mocked IPC + temp gateway, incl. phone layout)", "{py} tests/test_app_static.py"]
+evidence = ["playwright report"]
+fault_injection = ["websocket down -> polling fallback"]
+reviewers = ["gemini", "claude"]
+risk = "low"
+rollback = "revert; /console unchanged"
+size = "L"
+
+[[wp]]
+id = "R1-05"
+title = "Machine tab: runtime, workers, divergence, logs, nodes, task sentinel"
+stage = "R1"
+repo = "bitcadence"
+depends = ["R1-02", "R0-03"]
+scope = ["runtime state + controls via /v1", "process vs board-presence divergence", "redacted logs", "nodes from private nodes.toml (read-only)", "unknown OS scheduler entries listed (never deleted)"]
+non_goals = ["remote control of other nodes"]
+acceptance = ["{ui}", "playwright with mocked runtime"]
+evidence = []
+fault_injection = ["runtime stopped -> controls disabled, state shown"]
+reviewers = ["claude", "grok"]
+risk = "low"
+rollback = "revert"
+size = "M"
+
+[[wp]]
+id = "R1-06"
+title = "Cockpit view (optional terminal host)"
+stage = "R1"
+repo = "bitcadence"
+depends = ["R1-02", "N-02"]
+scope = ["herdr TUI in ConPTY -> xterm.js", "pane list/read", "run job", "hidden when herdr is absent"]
+non_goals = ["building a multiplexer"]
+acceptance = ["{rust}", "{ui}", "leaving the view ends the client within 2 s", "{popup}"]
+evidence = []
+fault_injection = ["herdr missing -> tab hidden, nothing else affected"]
+reviewers = ["gemini", "claude"]
+risk = "low"
+rollback = "revert"
+size = "M"
+
+# ----------------------------------------------------------------------------------------------- R2: plugins + migration
+[[wp]]
+id = "R2-01"
+title = "Plugin contract v1 and runtime runner"
+stage = "R2"
+repo = "bitcadence"
+depends = ["R0-02"]
+scope = ["schemas (manifest, status, view, node)", "discovery + trust lock (manifest + executable hashes)", "durable schedules (SQLite)", "status runner", "actions with verified owner grants", "kill switches", "@@bcd events", "plugin validate", "plugins/example-hello"]
+non_goals = ["custom UI panels", "resource enforcement"]
+acceptance = ["{py} tests/test_plugin_*.py", "schema generated == committed"]
+evidence = ["fault-injection report"]
+fault_injection = ["executable hash changed -> paused for review", "runtime restart mid-schedule -> exactly one catch-up", "STOP mid-action -> refused", "argv injection stays one literal element", "every spawn has an identity and no client token"]
+reviewers = ["claude", "gemini", "grok"]
+risk = "medium"
+rollback = "revert; plugins disabled"
+size = "L"
+
+[[wp]]
+id = "R2-02"
+title = "Desktop: view renderer, Needs you, Plugins trust/diff screen"
+stage = "R2"
+repo = "bitcadence"
+depends = ["R2-01", "R1-04"]
+scope = ["fixed view components", "needs-you aggregation", "trust review with diff", "pause/enable"]
+non_goals = ["arbitrary plugin code in the webview"]
+acceptance = ["{ui}", "renderer fuzz tests", "example-hello action round trip"]
+evidence = []
+fault_injection = ["malformed view -> inline error card, no crash"]
+reviewers = ["gemini", "grok"]
+risk = "low"
+rollback = "revert"
+size = "M"
+
+[[wp]]
+id = "R2-03"
+title = "Pipeline plugin (private)"
+stage = "R2"
+repo = "private-content"
+depends = ["R2-01"]
+scope = ["status/episodes/lanes JSON from a pure builder", "manifest replacing the pipeline's tick/watch/portal/dashboard OS tasks", "owner actions through grants", "job spawns via the runtime or cockpit"]
+non_goals = ["changing pipeline behaviour"]
+acceptance = ["private repo test suite", "plugin validate"]
+evidence = ["status JSON golden fixtures"]
+fault_injection = ["identity missing -> refused (never owner by default)"]
+reviewers = ["claude", "gemini"]
+risk = "medium"
+rollback = "revert in the private repo"
+size = "M"
+
+[[wp]]
+id = "R2-04"
+title = "Uploader plugin (private)"
+stage = "R2"
+repo = "private-content"
+depends = ["R2-01"]
+scope = ["status JSON (token validity/expiry/scopes, channel match, release queue) without secret values", "owner actions: auth, release, replace, verify, localizations, dubs"]
+non_goals = ["new platforms"]
+acceptance = ["private repo test suite", "no secret values in output (test)"]
+evidence = []
+fault_injection = ["expired token -> needs-you item, no crash"]
+reviewers = ["claude", "grok"]
+risk = "medium"
+rollback = "revert in the private repo"
+size = "M"
+
+[[wp]]
+id = "R2-05"
+title = "Scheduler plugin, deferred jobs, dependency validation, schedule import"
+stage = "R2"
+repo = "bitcadence"
+depends = ["R2-01"]
+scope = ["not_before honoured by leasing and stale reaping", "unknown depends_on -> 400", "schedule import with role mapping (dry-run default)", "calendar view"]
+non_goals = ["a second scheduler for board work"]
+acceptance = ["{py} tests/test_not_before.py tests/test_depends_on_validation.py tests/test_schedule_import.py", "DST golden dates"]
+evidence = []
+fault_injection = ["job with missing dependency rejected", "deferred job not leased early"]
+reviewers = ["claude", "gemini"]
+risk = "medium"
+rollback = "revert"
+size = "M"
+
+[[wp]]
+id = "R2-06"
+title = "Workload migration and OS task retirement"
+stage = "R2"
+repo = "bitcadence"
+depends = ["R0-05", "R2-03", "R2-04"]
+activation = true
+scope = ["runtime migrate: classify, export, disable-before-start, observe, verify equivalence, retire", "per-workload rollback", "order: pipeline tick/watch -> portal -> dashboard -> telemetry -> one-off job tasks (owner confirms list)"]
+non_goals = ["third-party tasks", "deleting unknown tasks"]
+acceptance = ["{py} tests/test_runtime_migrate.py (dry-run zero changes, ordering, rollback, idempotent)", "per workload: equivalence record"]
+evidence = ["equivalence records", "remaining BitCadence OS tasks = bootstrap only"]
+fault_injection = ["verification fails -> automatic rollback", "rerun -> no duplicates"]
+reviewers = ["claude", "grok", "gemini"]
+risk = "high"
+rollback = "per workload, from exported XML"
+size = "M"
+
+[[wp]]
+id = "R2-07"
+title = "Operational monitoring"
+stage = "R2"
+repo = "bitcadence"
+depends = ["R2-01", "R0-04"]
+scope = ["plugin health into the watchdog", "needs-you notifications", "daily digest"]
+non_goals = []
+acceptance = ["{py} ops/watchdog/tests"]
+evidence = []
+fault_injection = ["plugin status failing 3x -> alert"]
+reviewers = ["claude", "gemini"]
+risk = "low"
+rollback = "revert"
+size = "S"
+
+[[wp]]
+id = "R2-08"
+title = "Retire the legacy desktop tool and trays"
+stage = "R2"
+repo = "bitcadence"
+depends = ["R1-05", "R2-06"]
+scope = ["shim the old entry points to the new app", "remove the stale tray", "docs"]
+non_goals = []
+acceptance = ["{py}", "wiki GUI coverage check"]
+evidence = []
+fault_injection = []
+reviewers = ["gemini", "grok"]
+risk = "low"
+rollback = "revert"
+size = "S"
+
+# ----------------------------------------------------------------------------------------------- R3: publishing
+[[wp]]
+id = "R3-01"
+title = "Publishing core per ADR 0005 (private)"
+stage = "R3"
+repo = "private-content"
+depends = ["R2-06", "R2-05"]
+scope = ["durable state machine", "idempotency", "reconciliation", "board jobs with not_before + approval policy", "kill switches", "dry-run", "approve-first-N", "fake platform"]
+non_goals = ["live platform calls (R3-02)"]
+acceptance = ["private repo test suite"]
+evidence = ["fault-injection report"]
+fault_injection = ["crash in every state -> reconcile, no duplicate", "STOP/pause at every boundary -> no external call", "dry-run -> zero publish calls", "missing consent -> needs_owner"]
+reviewers = ["claude", "gemini", "grok"]
+risk = "high"
+rollback = "channels to dry-run"
+size = "L"
+
+[[wp]]
+id = "R3-02"
+title = "Platform adapters (spike first), setup, verification (private)"
+stage = "R3"
+repo = "private-content"
+depends = ["R3-01"]
+scope = ["confirm current platform docs and access levels", "adapters with recorded fixtures", "inbox-mode fallback", "credential store", "verification + delayed re-check"]
+non_goals = ["post deletion", "analytics"]
+acceptance = ["private repo test suite (fixtures for every endpoint and error)"]
+evidence = ["spike notes (private)"]
+fault_injection = ["platform restricts app -> inbox mode + alert"]
+reviewers = ["claude", "gemini", "grok"]
+risk = "high"
+rollback = "channels to dry-run"
+size = "L"
+
+[[wp]]
+id = "R3-03"
+title = "Publishing canary and activation"
+stage = "R3"
+repo = "private-content"
+depends = ["R3-02"]
+activation = true
+scope = ["canary on test accounts", "inbox canary", "set channel modes per private policy"]
+non_goals = []
+acceptance = ["canary verified with permalink", "STOP mid-run -> no further calls"]
+evidence = ["receipts"]
+fault_injection = ["kill during publish -> reconciled"]
+reviewers = ["claude"]
+risk = "high"
+rollback = "channels to dry-run"
+size = "S"
+
+# ----------------------------------------------------------------------------------------------- R4: maturity
+[[wp]]
+id = "R4-01"
+title = "Remaining screens; /console serves the new build"
+stage = "R4"
+repo = "bitcadence"
+depends = ["R2-02"]
+scope = ["port remaining screens", "legacy console kept one release"]
+non_goals = []
+acceptance = ["{ui}", "full playwright", "{py}"]
+evidence = []
+fault_injection = []
+reviewers = ["gemini", "claude"]
+risk = "low"
+rollback = "serve legacy console"
+size = "L"
+
+[[wp]]
+id = "R4-02"
+title = "Installer, first run, release workflow"
+stage = "R4"
+repo = "bitcadence"
+depends = ["R4-01", "R0-03"]
+scope = ["per-user installer (app + runtime bootstrap)", "first-run wizard", "release workflow with SBOM and checksums", "signing per owner decision"]
+non_goals = ["auto-updater before signing"]
+acceptance = ["CI installs silently, self-test, uninstalls; user config untouched"]
+evidence = []
+fault_injection = ["install over a running runtime -> upgrade semantics (exit 0, restart)"]
+reviewers = ["claude", "grok"]
+risk = "medium"
+rollback = "uninstall"
+size = "M"
+
+[[wp]]
+id = "R4-03"
+title = "Performance budgets, fuzzing, dependency audit, threat-model refresh"
+stage = "R4"
+repo = "bitcadence"
+depends = ["R4-02"]
+scope = ["self-test --budgets (first paint <= 1.5 s, idle CPU <= 0.3 %, hidden RSS <= 60 MB, open RSS <= 250 MB)", "parser fuzzing", "cargo deny, pnpm audit"]
+non_goals = []
+acceptance = ["--self-test --budgets exits 0 on the primary node", "cargo deny check", "pnpm audit --prod"]
+evidence = ["budget report"]
+fault_injection = []
+reviewers = ["claude", "grok"]
+risk = "low"
+rollback = "n/a"
+size = "M"
