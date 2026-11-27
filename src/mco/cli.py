@@ -806,6 +806,9 @@ app.add_typer(service_app, name="service")
 fleet_app = typer.Typer(help="Apply declarative per-worker service run modes.")
 app.add_typer(fleet_app, name="fleet")
 
+from mco.runtime.cli import runtime_app  # noqa: E402 - registered beside fleet
+app.add_typer(runtime_app, name="runtime")
+
 schedule_app = typer.Typer(help="Schedules and loops: what work gets created, and when.")
 app.add_typer(schedule_app, name="schedule")
 

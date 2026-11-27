@@ -35,6 +35,7 @@ from typing import Any, Callable, Optional
 from mco.scheduler import (
     Launcher,
     Schedule,
+    ScheduleConfigMissing,
     ScheduleState,
     exhaustion_reason,
     due_schedules,
@@ -304,6 +305,7 @@ def tick(
     state_path: Optional[Path] = None,
     now: Optional[datetime] = None,
     dry_run: bool = False,
+    hold: Optional[Callable[[], bool]] = None,
 ) -> list[dict]:
     """Run one scheduler pass. Returns a report row per schedule considered.
 
@@ -318,6 +320,10 @@ def tick(
     dirty = False
 
     for schedule in due_schedules(schedules.values(), states, now):
+        # Re-checked before every fire. A held schedule keeps its state, so it
+        # is still due, and runs once, when the hold is lifted.
+        if hold is not None and hold():
+            break
         state = states.setdefault(schedule.name, ScheduleState(name=schedule.name))
         launcher = launchers[schedule.launcher]
 
@@ -409,6 +415,7 @@ def run_forever(
     interval: float = 30.0,
     on_report: Optional[Callable[[list[dict]], None]] = None,
     max_ticks: Optional[int] = None,
+    hold: Optional[Callable[[], bool]] = None,
 ) -> None:
     """Tick on a fixed interval until interrupted.
 
@@ -419,7 +426,12 @@ def run_forever(
     ticks = 0
     while max_ticks is None or ticks < max_ticks:
         try:
-            report = tick(client, config_path, state_path)
+            try:
+                report = tick(client, config_path, state_path, hold=hold)
+            except ScheduleConfigMissing:
+                if hold is None:
+                    raise
+                report = []  # a supervised scheduler with nothing configured is idle, not failing
             from mco.config import get_config
             heartbeat = get_config().get("MCO_SCHEDULER_HEARTBEAT_FILE")
             if heartbeat:
