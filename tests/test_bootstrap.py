@@ -1,6 +1,8 @@
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import sys
+import uuid
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -63,18 +65,54 @@ def test_install_exports_scheduler_definition_and_uninstall_uses_same_name(tmp_p
     assert export.is_file()
 
 
-@pytest.mark.parametrize(("runtime_codes", "task_code", "delays"), [
-    ([0], 0, []),
-    ([3], 0, []),
-    ([1, 15, 1, 0], 0, [60, 60, 60]),
-    ([1, 3], 0, [60]),
-    ([1, 7, 1, 15], 1, [60, 60, 60]),
+@pytest.mark.skipif(os.name != "nt", reason="Windows task registration")
+def test_scheduler_uninstall_checks_ownership_and_is_idempotent(tmp_path):
+    sid = bootstrap.current_user_sid()
+    name = f"BitCadence Runtime TEST-{uuid.uuid4().hex}"
+    # Remove the trigger so this task can never run on sign-in.
+    xml = bootstrap.task_xml(name, sid, Path(sys.executable), ["-c", "pass"], tmp_path)
+    trigger_start = xml.index("<Triggers>")
+    trigger_end = xml.index("</Triggers>") + len("</Triggers>")
+    xml = xml[:trigger_start] + xml[trigger_end:]
+    bootstrap.register_task(name, sid, xml)
+    try:
+        for _ in range(2):
+            with pytest.raises(RuntimeError, match="without the BitCadence bootstrap ownership marker"):
+                bootstrap.unregister_task(name, sid + "-0")
+    finally:
+        bootstrap.unregister_task(name, sid)
+
+    bootstrap.unregister_task(name, sid)
+
+
+@pytest.mark.parametrize(("runtime_codes", "run_seconds", "task_code", "delays"), [
+    ([0], [1], 0, []),
+    ([3], [1], 0, []),
+    ([1, 15, 1, 0], [1, 1, 1, 1], 0, [60, 60, 60]),
+    ([1, 3], [1, 1], 0, [60]),
+    ([1, 7, 1, 15], [1, 599, 1, 1], 1, [60, 60, 60]),
+    pytest.param([1, 1, 1, 1, 1, 1, 0], [1, 1, 1, 601, 1, 1, 1], 0, [60] * 6,
+                 id="stable-run-resets-restart-budget"),
 ])
-def test_task_launcher_retries_crashes_only(monkeypatch, tmp_path, runtime_codes, task_code, delays):
+def test_task_launcher_retries_crashes_only(
+    monkeypatch, tmp_path, runtime_codes, run_seconds, task_code, delays,
+):
     from types import SimpleNamespace
 
-    outcomes = iter(runtime_codes)
+    outcomes = iter(zip(runtime_codes, run_seconds, strict=True))
     slept = []
+    now = 0
+
+    def wait(timeout):
+        nonlocal now
+        code, elapsed = next(outcomes)
+        now += elapsed
+        return code
+
+    def sleep(seconds):
+        nonlocal now
+        slept.append(seconds)
+        now += seconds
 
     class Adapter:
         def __init__(self, *, pidfile):
@@ -82,16 +120,26 @@ def test_task_launcher_retries_crashes_only(monkeypatch, tmp_path, runtime_codes
 
         def spawn(self, argv, cwd, env, stdout, stderr):
             assert argv == ["python.exe", "-m", "mco.cli", "runtime", "run"]
-            return SimpleNamespace(pid=123, wait=lambda timeout: next(outcomes), close=lambda: None)
+            os.write(stderr, b"runtime diagnostic\n")
+            return SimpleNamespace(pid=123, wait=wait, close=lambda: None)
 
         def forget_pid(self, pid):
             assert pid == 123
 
     monkeypatch.setattr("mco.agentd.platform.windows.WindowsAdapter", Adapter)
-    monkeypatch.setattr("time.sleep", slept.append)
+    monkeypatch.setattr(bootstrap, "time", SimpleNamespace(monotonic=lambda: now, sleep=sleep))
     assert bootstrap.launch_runtime(
         ["python.exe", "-m", "mco.cli", "runtime", "run"],
         tmp_path, tmp_path,
     ) == task_code
     assert not list(outcomes)
     assert slept == delays
+    entries = (tmp_path / "bootstrap.log").read_text(encoding="ascii").splitlines()
+    assert len(entries) == len(delays) + (task_code == 1)
+    for entry in entries:
+        timestamp, message = entry.split(" ", 1)
+        assert datetime.fromisoformat(timestamp).tzinfo == timezone.utc
+        assert message.startswith("Runtime exited ")
+    assert (tmp_path / "bootstrap-child.log").read_text(encoding="ascii").splitlines() == [
+        "runtime diagnostic",
+    ] * len(runtime_codes)

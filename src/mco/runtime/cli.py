@@ -73,9 +73,9 @@ def run(
 
 @runtime_app.command("install-bootstrap")
 def install_bootstrap(
-    xml: Optional[Path] = typer.Option(None, "--xml", help="Output path for the exported Scheduled Task XML."),
+    xml: Optional[Path] = typer.Option(None, "--xml", help="Output path for the UTF-16 Scheduled Task XML."),
 ) -> None:
-    """Register the current user's Windows sign-in task and export its XML."""
+    """Register the current user's Windows sign-in task and export its XML as UTF-16."""
     from .bootstrap import install_bootstrap as install
 
     try:

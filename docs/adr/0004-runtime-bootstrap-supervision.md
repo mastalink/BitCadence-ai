@@ -42,7 +42,7 @@ desktop tool runs it inside its own process, coupling supervision to a window.
 ## Windows bootstrap commands
 
 Run `bitcadence runtime install-bootstrap` as the user who will run the runtime. It creates
-`BitCadence Runtime <Windows user SID>` and exports the registered XML to
+`BitCadence Runtime <Windows user SID>` and exports the registered XML as UTF-16 to
 `~/.mco/runtime/bootstrap.xml`. Pass `--xml <path>` to choose another export location.
 Registration uses the current Python installation and package directory, so keep those paths
 available at sign-in. An existing task of that name must be uninstalled before reinstalling.
@@ -53,8 +53,10 @@ launcher maps that result to 0 and ends without consuming a retry. A deliberate 
 ends the launcher with 0. The Windows drill found that returning a runtime crash code
 through a successfully started action did not trigger a retry. The launcher handles
 runtime process crashes with up to three retries, with a 60-second delay before each.
-The native task settings remain three attempts one minute apart for action launch
-failures. Runtime crash codes and retry decisions are written to `~/.mco/runtime/bootstrap.log`.
+A runtime that runs for more than 10 minutes resets the retry budget. The native task
+settings remain three attempts one minute apart for action launch failures.
+The launcher records crash codes and retry decisions with UTC timestamps in `~/.mco/runtime/bootstrap.log`.
+The runtime process writes its standard output and standard error to `~/.mco/runtime/bootstrap-child.log`.
 
 Use `bitcadence runtime stop` for a graceful stop. To roll back bootstrap registration,
 run `bitcadence runtime uninstall-bootstrap`. This removes only the current user's

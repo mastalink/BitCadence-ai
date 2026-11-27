@@ -108,10 +108,11 @@ def exercise(live: Live, evidence: Path, log: TextIO) -> None:
         assert not late, "runtime relaunch exceeded PT1M plus one second of dispatch latency"
     except Exception as exc:
         record(f"FAIL: {exc}")
-        log_path = live.paths.runtime / "bootstrap.log"
-        if log_path.exists():
-            print(log_path.read_text(encoding="utf-8", errors="replace").replace(str(live.root), "<test-home>"),
-                  file=log, flush=True)
+        for filename in ("bootstrap.log", "bootstrap-child.log"):
+            log_path = live.paths.runtime / filename
+            if log_path.exists():
+                print(log_path.read_text(encoding="utf-8", errors="replace").replace(str(live.root), "<test-home>"),
+                      file=log, flush=True)
         raise
     finally:
         scheduler(name, "/end", check=False)

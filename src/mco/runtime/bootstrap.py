@@ -1,6 +1,7 @@
 """Register one interactive Windows task and launch the console runtime invisibly."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import subprocess
@@ -18,6 +19,7 @@ NAMESPACE = "http://schemas.microsoft.com/windows/2004/02/mit/task"
 DESCRIPTION = "BitCadence managed runtime bootstrap for"
 RESTART_COUNT = 3
 RESTART_INTERVAL = 60
+STABILITY_WINDOW_SECONDS = 10 * 60
 POWERSHELL = r"""
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -145,26 +147,35 @@ def launch_runtime(argv: list[str], cwd: Path, runtime_dir: Path, *, source: Pat
     if source is not None:
         env["PYTHONPATH"] = str(source)
     adapter = WindowsAdapter(pidfile=runtime_dir / "bootstrap.pids")
-    with (runtime_dir / "bootstrap.log").open("ab") as log:
+    with (
+        (runtime_dir / "bootstrap.log").open("a", encoding="utf-8") as log,
+        (runtime_dir / "bootstrap-child.log").open("ab") as child_log,
+    ):
         # Task Scheduler counts launch failures. A successfully started action
         # returning a nonzero process result does not reliably trigger a retry.
-        for n in range(RESTART_COUNT + 1):
-            child = adapter.spawn(argv, cwd, env, log.fileno(), log.fileno())
+        restarts = 0
+        while True:
+            child = adapter.spawn(argv, cwd, env, child_log.fileno(), child_log.fileno())
+            started = time.monotonic()
             try:
                 code = child.wait(timeout=None)
+                elapsed = time.monotonic() - started
             finally:
                 child.close()
                 adapter.forget_pid(child.pid)
             if code in {EXIT_STOPPED, EXIT_ALREADY_RUNNING}:
                 return EXIT_STOPPED
-            if n == RESTART_COUNT:
-                log.write(f"Runtime exited {code}; restart budget exhausted.\n".encode("ascii"))
-                break
-            log.write(f"Runtime exited {code}; restart {n + 1}/{RESTART_COUNT} in {RESTART_INTERVAL}s.\n"
-                      .encode("ascii"))
+            if elapsed > STABILITY_WINDOW_SECONDS:
+                restarts = 0
+            timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            if restarts == RESTART_COUNT:
+                log.write(f"{timestamp} Runtime exited {code}; restart budget exhausted.\n")
+                return EXIT_CRASH
+            restarts += 1
+            log.write(f"{timestamp} Runtime exited {code}; "
+                      f"restart {restarts}/{RESTART_COUNT} in {RESTART_INTERVAL}s.\n")
             log.flush()
             time.sleep(RESTART_INTERVAL)
-    return EXIT_CRASH
 
 
 def run_scheduled(python: str, source: str) -> int:
