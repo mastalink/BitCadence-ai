@@ -4,7 +4,7 @@ The browser phone follow-up was checked on **November 16, 2026**, on source base
 
 ## CLI coverage
 
-The [complete CLI reference](mco-cli-reference.md) maps **109 command/group paths** and **342 arguments and options** across the shared `bitcadence` / `mco` tree. It includes nested groups, defaults, required arguments, option aliases, repeatable values, hidden compatibility options and synthesized help/completion options. Each command has a purpose, safe example, expected result and recovery notes.
+The [complete CLI reference](mco-cli-reference.md) maps **123 command/group paths** and **376 arguments and options** across the shared `bitcadence` / `mco` tree. It includes nested groups, defaults, required arguments, option aliases, repeatable values, hidden compatibility options and synthesized help/completion options. Each command has a purpose, safe example, expected result and recovery notes.
 
 The [machine-readable inventory](_review/cli-coverage.json) binds every path and parameter to a documentation anchor and source metadata. The checker compares the actual Typer command tree without invoking operational callbacks. Unknown commands/options, changed defaults and missing anchors are failures. Negative-control checks also verified that the checker rejects missing/stale commands and parameters.
 

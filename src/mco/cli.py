@@ -806,6 +806,9 @@ app.add_typer(service_app, name="service")
 fleet_app = typer.Typer(help="Apply declarative per-worker service run modes.")
 app.add_typer(fleet_app, name="fleet")
 
+from mco.runtime.cli import runtime_app  # noqa: E402 - registered beside fleet
+app.add_typer(runtime_app, name="runtime")
+
 schedule_app = typer.Typer(help="Schedules and loops: what work gets created, and when.")
 app.add_typer(schedule_app, name="schedule")
 
@@ -2804,13 +2807,14 @@ def list_agents():
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. Governance: workflows, audit trail, approval gates
 # ─────────────────────────────────────────────────────────────────────────────
-def _gateway_client():
+def _gateway_client(*, gateway_url: Optional[str] = None):
     """GatewayClient resolved from the full config stack, not just os.environ.
 
     Reads MCO_GATEWAY_URL / MCO_AGENT_TOKEN / AGENT_ROLE / AGENT_INSTANCE_ID
     from get_config() (which layers .env + the AES-256-GCM secret store over
     the OS environment), so `mco workflow|approve|sync|...` work from any shell
     once the token is in .env or the vault - no per-shell `set` required.
+    An explicit gateway URL overrides the configured URL.
 
     Local-Only zero-config: the gateway seeds its operator agent from
     MCO_LOCAL_TOKEN, so when no explicit MCO_AGENT_TOKEN is configured we fall
@@ -2822,7 +2826,7 @@ def _gateway_client():
     config = get_config()
     token = config.get("MCO_AGENT_TOKEN") or config.get("MCO_LOCAL_TOKEN") or None
     return GatewayClient(
-        base_url=config.get("MCO_GATEWAY_URL") or None,
+        base_url=gateway_url or config.get("MCO_GATEWAY_URL") or None,
         token=token,
         role=config.get("AGENT_ROLE") or None,
         instance_id=config.get("AGENT_INSTANCE_ID") or None,

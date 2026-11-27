@@ -10,6 +10,7 @@ the token is what carries the weight.
 
 from __future__ import annotations
 
+from contextlib import AbstractContextManager, nullcontext
 import hashlib
 import os
 import secrets
@@ -91,6 +92,7 @@ def create_control_app(
     log_token_provider: Callable[[], str] | None = None,
     token_store: AgentdTokenStore | None = None,
     gateway_reachable: Callable[[], bool] | None = None,
+    mutation: Callable[[], AbstractContextManager[None]] = nullcontext,
 ) -> FastAPI:
     """Create the v1 transport; all behavior stays in injected collaborators."""
     token_store = token_store or AgentdTokenStore()
@@ -195,7 +197,8 @@ def create_control_app(
 
     def invoke(name: str, action: Callable[[str], None]) -> dict[str, object]:
         try:
-            action(name)
+            with mutation():
+                action(name)
             return cast(dict[str, object], supervisor.status(name))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -219,12 +222,14 @@ def create_control_app(
     @app.post("/v1/drain", dependencies=protected)
     def drain() -> dict[str, object]:
         """Upgrade step: stop spawning and stop every child, against a deadline."""
-        supervisor.drain()
+        with mutation():
+            supervisor.drain()
         return daemon_document()
 
     @app.post("/v1/resume", dependencies=protected)
     def resume() -> dict[str, object]:
-        supervisor.resume()
+        with mutation():
+            supervisor.resume()
         return daemon_document()
 
     @app.get("/v1/config", dependencies=protected)
@@ -258,8 +263,15 @@ def create_control_app(
                 status_code=428,
                 detail="send the generation you read (If-Match header, or JSON 'generation')",
             )
+
+        def replace_config() -> None:
+            with mutation():
+                watcher.replace(content, expected)
+
         try:
-            await run_in_threadpool(watcher.replace, content, expected)
+            await run_in_threadpool(replace_config)
+        except HTTPException:
+            raise
         except GenerationConflict as exc:
             raise HTTPException(
                 status_code=409,
@@ -273,10 +285,11 @@ def create_control_app(
 
     @app.post("/v1/reload", dependencies=protected)
     def reload_fleet_config() -> dict[str, object]:
-        watcher.poll(force=True)
-        if watcher.last_error:
-            raise HTTPException(status_code=422, detail=watcher.last_error)
-        return manager.snapshot()
+        with mutation():
+            watcher.poll(force=True)
+            if watcher.last_error:
+                raise HTTPException(status_code=422, detail=watcher.last_error)
+            return manager.snapshot()
 
     @app.get("/v1/logs", dependencies=log_protected)
     def get_logs(
