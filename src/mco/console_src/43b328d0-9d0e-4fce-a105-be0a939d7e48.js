@@ -644,7 +644,6 @@ function Home({jobs, agents, onNav, onOpen, onWatch}) {
       </button>;
     })}</div>
     {!running.length && <p>No work is running right now.</p>}
-    {jobs.length >= 200 && <p>Showing the most recent 200 jobs. Older work may be outside this view.</p>}
     <button onClick={() => onNav("jobs")}>See all work</button>
   </div>;
 }

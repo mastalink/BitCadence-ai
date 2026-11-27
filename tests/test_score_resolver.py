@@ -5,8 +5,6 @@ import hashlib
 import pytest
 
 from mco.localstore import LocalStore
-from mco.orchestrator.audit import record_event
-from mco.orchestrator.delivery import REROUTED
 from mco.orchestrator.presence import BROKEN, DISABLED, OFFLINE, STANDBY, WORKING
 from mco.orchestrator.score_bridge import ScoreBridge
 from mco.orchestrator.score_dispatcher import resolve_score_targets
@@ -127,34 +125,12 @@ def test_offline_identities_are_excluded(db):
 
 def test_broken_identities_are_excluded(db):
     score = make_score([("auditor", "reviewer")])
-    stall_sec = 600
-
-    # aud-healthy is fine
     db.table("agent_registry").insert(_agent("aud-healthy", "auditor", seen_seconds_ago=10)).execute()
-    # aud-stalled has a pending job targeted at it that stalled past window -> broken
-    db.table("agent_registry").insert(_agent("aud-stalled", "auditor", seen_seconds_ago=10)).execute()
-    _job(db, "stuck-job", role="auditor", target="aud-stalled", age=stall_sec + 120)
-
-    # rev-healthy is fine
+    db.table("agent_registry").insert(_agent("aud-fault", "auditor", status=BROKEN)).execute()
     db.table("agent_registry").insert(_agent("rev-healthy", "reviewer", seen_seconds_ago=5)).execute()
-    # rev-rerouted has had a job rerouted away within the last hour -> broken
-    db.table("agent_registry").insert(_agent("rev-rerouted", "reviewer", seen_seconds_ago=5)).execute()
-    _job(db, "moved-job", status="completed", role="reviewer")
-    record_event(
-        db,
-        "moved-job",
-        REROUTED,
-        "system",
-        "delivery",
-        {"from_role": "reviewer", "from_instance": "rev-rerouted", "to_role": "reviewer"},
-    )
+    db.table("agent_registry").insert(_agent("rev-fault", "reviewer", status=BROKEN)).execute()
 
-    targets = resolve_score_targets(
-        score,
-        org_id="default",
-        db_client=db,
-        stall_seconds=stall_sec,
-    )
+    targets = resolve_score_targets(score, org_id="default", db_client=db)
     assert targets["auditor"] == ["aud-healthy"]
     assert targets["reviewer"] == ["rev-healthy"]
 

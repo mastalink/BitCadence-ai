@@ -51,7 +51,7 @@ def main():
                         requests.append((route.request.method, route.request.url))
                         if path == '/api/agents': data = agents
                         elif path == '/api/jobs':
-                            assert 'limit=200' in route.request.url
+                            assert 'limit=' not in route.request.url
                             data = jobs
                         elif path == '/api/score/autonomy/runs/fixture-run': data = run
                         else: data = []

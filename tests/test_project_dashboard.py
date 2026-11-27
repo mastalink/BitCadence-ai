@@ -70,7 +70,7 @@ def test_portfolio_uses_its_aggregate_instead_of_partial_job_coverage():
 
 def test_portfolio_dataset_is_lazy_and_not_part_of_fleet_poll():
     adapter = (ROOT / "src" / "mco" / "console_src" / "47e66145-9c4d-41a1-acbb-42b12848f160.js").read_text(encoding="utf-8")
-    assert 'Promise.all([api("/api/jobs?limit=200"), api("/api/agents"), refreshApprovals(version)])' in adapter
+    assert 'Promise.all([api("/api/jobs?compact=true"), api("/api/agents"), refreshApprovals(version)])' in adapter
     assert adapter.count('api("/api/portfolio")') == 1
     assert "Date.now() - portfolioFetchedAt < 30000" in adapter
     assert "page !== \"portfolio\"" in SHELL_SOURCE
@@ -88,6 +88,7 @@ def test_approval_view_includes_old_decisions_and_pages_with_org_isolation(proje
     for job in jobs:
         db.table("agent_jobs").insert(job).execute()
     recent = http.get("/api/jobs?limit=200").json()
+    assert len(recent) == 200
     assert all(job["status"] == "completed" for job in recent)
     response = http.get("/api/jobs/approval-view")
     assert response.status_code == 200

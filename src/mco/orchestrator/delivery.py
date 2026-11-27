@@ -143,8 +143,8 @@ def _delivery_state(job: dict, events: list) -> tuple[Optional[datetime], set, i
 def _online_roles(db: Any, org: str) -> set:
     """Roles that can take rerouted work: an agent in standby or working.
 
-    Reachable is not enough - rerouting onto an agent that is itself `broken`
-    (awake but not taking work) just moves the stall."""
+    Workers reporting a fault or in quota cooldown are ineligible even if
+    they are reachable."""
     from mco.orchestrator.presence import available_roles, describe_fleet
     from mco.orchestrator.routes import get_offline_after_seconds
 
@@ -180,7 +180,7 @@ def _online_instances(db: Any, org: str) -> list:
     rows = db.table("agent_registry").select("*").execute().data or []
     fleet = describe_fleet(db, rows, threshold=get_offline_after_seconds())
     return [(str(r.get("role") or "").lower(), r.get("instance_id")) for r in fleet
-            if (r.get("org_id") or "default") == org and r.get("state") in {STANDBY, WORKING}]
+            if (r.get("org_id") or "default") == org and r.get("routing_available", r.get("state") in {STANDBY, WORKING})]
 
 
 def _busy_instances(db: Any) -> set:
@@ -221,6 +221,8 @@ def sweep(
 ) -> SweepResult:
     """Advance delivery for every stalled PENDING job by at most one step."""
     from mco.orchestrator.audit import get_events, record_event
+    from mco.orchestrator.worker_policy import can_run, quota_workers, recover_quota
+    from mco.orchestrator.stale import expire_waiting
 
     config = config if config is not None else get_config()
     result = SweepResult()
@@ -231,6 +233,11 @@ def sweep(
         return result
 
     now = now or datetime.now(timezone.utc)
+    for recovered in recover_quota(db, now=now):
+        result.broadcasts.append(('job_pending', recovered))
+    for expired in expire_waiting(db, now=now, config=config):
+        result.broadcasts.append(('job_updated', expired))
+    unavailable_by_org: dict[str, set] = {}
     fallbacks = parse_fallbacks(config.get("MCO_ROUTE_FALLBACKS"))
     max_reroutes = get_max_reroutes(config)
     online_roles = online_roles or _online_roles
@@ -284,6 +291,9 @@ def sweep(
         role = str(job.get("target_agent_role") or "").lower()
         payload = job.get("input_payload") or {}
         org = job.get("org_id") or "default"
+        if org not in unavailable_by_org:
+            unavailable_by_org[org] = quota_workers(db, org=org, now=now, config=config)
+        unavailable = unavailable_by_org[org]
         target = None
         target_id = None
         reason = None
@@ -306,7 +316,8 @@ def sweep(
                 for r in fallbacks[role]:
                     target_id = next((i for rr, i in instance_cache[org]
                                       if rr == r and str(i or "").lower() != str(pinned).lower()
-                                      and instance_host(i, rr) == host), None)
+                                      and instance_host(i, rr) == host and i not in unavailable
+                                      and can_run(job, rr, i, config)), None)
                     if target_id:
                         target = r
                         break
@@ -316,7 +327,18 @@ def sweep(
         else:
             if org not in online_cache:
                 online_cache[org] = online_roles(db, org)
-            target = next((r for r in fallbacks[role] if r in online_cache[org]), None)
+            constrained = isinstance(payload, dict) and 'routing' in payload
+            if constrained or unavailable:
+                if org not in instance_cache:
+                    instance_cache[org] = online_instances(db, org)
+                for r in fallbacks[role]:
+                    target_id = next((i for rr, i in instance_cache[org]
+                                      if rr == r and i not in unavailable and can_run(job, rr, i, config)), None)
+                    if target_id:
+                        target = r
+                        break
+            else:
+                target = next((r for r in fallbacks[role] if r in online_cache[org]), None)
             if target is None:
                 reason = f"no online agent for fallback roles {fallbacks[role]}"
 
@@ -329,7 +351,7 @@ def sweep(
                 continue  # leased or changed since we read it: delivery happened
             record_event(db, job_id, REROUTED, ACTOR_ID, ACTOR_ROLE,
                          {"from_role": job.get("target_agent_role"),
-                          "from_instance": job.get("target_agent_id"),
+                          "from_instance": job.get("target_agent_id"), "org_id": org,
                           "to_role": target, "to_instance": target_id,
                           "pending_seconds": int(age)})
             result.broadcasts.append(("job_pending", updated[0]))
@@ -351,7 +373,7 @@ def sweep(
         record_event(db, job_id, ESCALATED, ACTOR_ID, ACTOR_ROLE,
                      {"reason": reason, "pending_seconds": int(age),
                       "target_agent_role": job.get("target_agent_role"),
-                      "target_agent_id": job.get("target_agent_id")})
+                      "target_agent_id": job.get("target_agent_id"), "org_id": org})
         result.broadcasts.append(("job_undeliverable", job))
         result.notifications.append({
             "job_id": job_id,
