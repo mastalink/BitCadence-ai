@@ -33,6 +33,12 @@ This reference covers every registered command and group recursively, every posi
 - [mco cancel](#cli-mco-cancel) — Call off a job that hasn't finished yet (approver-role token).
 - [mco cio](#cli-mco-cio) — Deterministic policy checks backing ops/cio-sidecar-brief.md.
   - [mco cio check](#cli-mco-cio-check) — Check one proposal against the brief's mechanical rules and print a verdict.
+- [mco cockpit](#cli-mco-cockpit) — One herdr session for every process and job: no console windows.
+  - [mco cockpit attach](#cli-mco-cockpit-attach) — Open the cockpit in this terminal (all workspaces, panes and agents).
+  - [mco cockpit read](#cli-mco-cockpit-read) — Print the recent output of a cockpit pane.
+  - [mco cockpit run](#cli-mco-cockpit-run) — Run a one-off job in its own cockpit pane instead of a new console window.
+  - [mco cockpit status](#cli-mco-cockpit-status) — Show declared panes and running one-off jobs.
+  - [mco cockpit up](#cli-mco-cockpit-up) — Start the cockpit and every declared pane (~/.mco/cockpit.toml + fleet workers with mode=pane).
 - [mco connect](#cli-mco-connect) — Connect an AI app to BitCadence.
 - [mco connectors](#cli-mco-connectors) — List configured enterprise connectors and their health (via the gateway).
 - [mco deregister](#cli-mco-deregister) — Remove an agent registration. Its token stops working immediately.
@@ -73,6 +79,8 @@ This reference covers every registered command and group recursively, every posi
 - [mco restore-fence](#cli-mco-restore-fence) — After a DB restore, pause work and invalidate every pre-restore claim.
 - [mco resume](#cli-mco-resume) — Resume after a pause.
 - [mco retry](#cli-mco-retry) — Re-queue a failed or rejected job back to pending (approver-role token).
+- [mco review](#cli-mco-review) — Send work to independent reviewers from different model families.
+  - [mco review fanout](#cli-mco-review-fanout) — Post one review job per model family (Codex/GPT, Gemini/Antigravity, ...), skipping the builder's.
 - [mco schedule](#cli-mco-schedule) — Schedules and loops: what work gets created, and when.
   - [mco schedule add](#cli-mco-schedule-add) — Add a schedule by asking what, how often and what time.
   - [mco schedule disable](#cli-mco-schedule-disable) — Disable a schedule or loop, leaving its definition and history intact.
@@ -473,6 +481,113 @@ Implementation: [src/mco/cli.py:1561](../../src/mco/cli.py#L1561). Global/group 
 | <a id="cli-mco-cio-check-param-proposed-by"></a>`--proposed-by` | TEXT; optional | `""` (empty) | Identity that authored the proposal. |
 | <a id="cli-mco-cio-check-param-category"></a>`--category` | TEXT; optional; repeatable | `[]` | Repeatable; a policy category the proposal touches. |
 | <a id="cli-mco-cio-check-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-cockpit"></a>
+## `mco cockpit`
+
+One herdr session for every process and job: no console windows.
+
+Safe example: `bitcadence cockpit --help`. Expected result: list the following subcommands and group options. Select a child command for its operation and recovery instructions.
+
+Subcommands: [attach](#cli-mco-cockpit-attach), [read](#cli-mco-cockpit-read), [run](#cli-mco-cockpit-run), [status](#cli-mco-cockpit-status), [up](#cli-mco-cockpit-up).
+
+Global/group options: [mco](#cli-mco).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-cockpit-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-cockpit-attach"></a>
+## `mco cockpit attach`
+
+Open the cockpit in this terminal (all workspaces, panes and agents).
+
+Usage example: `bitcadence cockpit attach`
+
+**Expected result:** Opens the herdr cockpit TUI in this terminal; exits with herdr's exit code when you detach.
+
+**If it fails / before changing state:** Needs herdr installed (PATH, BITCADENCE_HERDR, or `herdr` in ~/.mco/cockpit.toml). A pinned path that is missing is an error, never a fallback to another herdr. Read-only: starts nothing.
+
+Implementation: [src/mco/cli.py:1830](../../src/mco/cli.py#L1830). Global/group options: [mco](#cli-mco), [mco cockpit](#cli-mco-cockpit).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-cockpit-attach-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-cockpit-read"></a>
+## `mco cockpit read`
+
+Print the recent output of a cockpit pane.
+
+Usage example: `bitcadence cockpit read render-episode-12 --lines 40`
+
+**Expected result:** Prints the most recent output lines of the pane with that label.
+
+**If it fails / before changing state:** Fails if herdr or the label is missing. Reading output does not prove the job succeeded.
+
+Implementation: [src/mco/cli.py:1813](../../src/mco/cli.py#L1813). Global/group options: [mco](#cli-mco), [mco cockpit](#cli-mco-cockpit).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-cockpit-read-param-label"></a>`LABEL` (positional) | TEXT; required | required | Pane label. |
+| <a id="cli-mco-cockpit-read-param-lines"></a>`--lines` | INTEGER; optional | `80` | How many recent lines. |
+| <a id="cli-mco-cockpit-read-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-cockpit-run"></a>
+## `mco cockpit run`
+
+Run a one-off job in its own cockpit pane instead of a new console window.
+
+Usage example: `bitcadence cockpit run render-episode-12 -- python render.py --episode 12`
+
+**Expected result:** Starts the command in its own labelled pane of the jobs workspace and prints the pane id. Never opens a console window.
+
+**If it fails / before changing state:** Refuses a label that is already live unless --reuse; refuses an empty command or one containing a line break. Starting the command is not evidence it finished: read the pane or its outputs.
+
+Implementation: [src/mco/cli.py:1796](../../src/mco/cli.py#L1796). Global/group options: [mco](#cli-mco), [mco cockpit](#cli-mco-cockpit).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-cockpit-run-param-label"></a>`LABEL` (positional) | TEXT; required | required | Unique pane label for this job, e.g. render-episode-12. |
+| <a id="cli-mco-cockpit-run-param-command"></a>`COMMAND` (positional) | TEXT; required; variadic | required | The command and its arguments (put them after --). |
+| <a id="cli-mco-cockpit-run-param-workspace"></a>`--workspace` | TEXT; optional | `jobs` | Workspace to put the pane in. |
+| <a id="cli-mco-cockpit-run-param-cwd"></a>`--cwd` | TEXT; optional | `""` (empty) | Working directory for the pane. |
+| <a id="cli-mco-cockpit-run-param-reuse"></a>`--reuse` | BOOLEAN; flag; optional | `false` | Run in the existing pane with this label. |
+| <a id="cli-mco-cockpit-run-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-cockpit-status"></a>
+## `mco cockpit status`
+
+Show declared panes and running one-off jobs.
+
+Usage example: `bitcadence cockpit status`
+
+**Expected result:** A table of declared panes and one-off jobs, with whether each pane's shell is running something.
+
+**If it fails / before changing state:** Reports a clear error when herdr is not installed (not every pane as stopped). Read-only.
+
+Implementation: [src/mco/cli.py:1779](../../src/mco/cli.py#L1779). Global/group options: [mco](#cli-mco), [mco cockpit](#cli-mco-cockpit).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-cockpit-status-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-cockpit-up"></a>
+## `mco cockpit up`
+
+Start the cockpit and every declared pane (~/.mco/cockpit.toml + fleet workers with mode=pane).
+
+Usage example: `bitcadence cockpit up`
+
+**Expected result:** Starts every declared pane that is not already running (cockpit.toml [[pane]] plus fleet workers with mode=pane) and prints one line per pane.
+
+**If it fails / before changing state:** Idempotent: busy panes are left alone, panes restored as idle shells after a reboot get their command again. Starts processes; check `cockpit status` first.
+
+Implementation: [src/mco/cli.py:1767](../../src/mco/cli.py#L1767). Global/group options: [mco](#cli-mco), [mco cockpit](#cli-mco-cockpit).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-cockpit-up-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
 
 <a id="cli-mco-connect"></a>
 ## `mco connect`
@@ -1226,6 +1341,44 @@ Implementation: [src/mco/cli.py:2727](../../src/mco/cli.py#L2727). Global/group 
 |---|---|---|---|
 | <a id="cli-mco-retry-param-job-id"></a>`JOB_ID` (positional) | TEXT; required | required | Failed/rejected job ID to re-queue. |
 | <a id="cli-mco-retry-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-review"></a>
+## `mco review`
+
+Send work to independent reviewers from different model families.
+
+Safe example: `bitcadence review --help`. Expected result: list the following subcommands and group options. Select a child command for its operation and recovery instructions.
+
+Subcommands: [fanout](#cli-mco-review-fanout).
+
+Global/group options: [mco](#cli-mco).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-review-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-review-fanout"></a>
+## `mco review fanout`
+
+Post one review job per model family (Codex/GPT, Gemini/Antigravity, ...), skipping the builder's.
+
+Usage example: `bitcadence review fanout --subject "PR 12 parser" --rubric-file rubric.txt --file src/parser.py --exclude-family gpt --dry-run`
+
+**Expected result:** Posts one review job per remaining model family (or, with --dry-run, only shows who would be asked) and prints the job ids.
+
+**If it fails / before changing state:** Refuses when fewer than two families remain after excluding the builder's family. Use --dry-run first; posting creates board jobs. A posted review is not a verdict.
+
+Implementation: [src/mco/cli.py:1844](../../src/mco/cli.py#L1844). Global/group options: [mco](#cli-mco), [mco review](#cli-mco-review).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-review-fanout-param-subject"></a>`--subject` | TEXT; required | required | What is being reviewed, in a few words. |
+| <a id="cli-mco-review-fanout-param-rubric-file"></a>`--rubric-file` | TEXT; required | required | Text file with the pass bar. |
+| <a id="cli-mco-review-fanout-param-file"></a>`--file` | TEXT; optional; repeatable | `[]` | A file to review (repeatable). |
+| <a id="cli-mco-review-fanout-param-exclude-family"></a>`--exclude-family` | TEXT; optional; repeatable | `[]` | Model family that built the work (never reviews it). |
+| <a id="cli-mco-review-fanout-param-priority"></a>`--priority` | INTEGER; optional | `0` |  |
+| <a id="cli-mco-review-fanout-param-dry-run"></a>`--dry-run` | BOOLEAN; flag; optional | `false` | Show who would be asked; post nothing. |
+| <a id="cli-mco-review-fanout-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
 
 <a id="cli-mco-schedule"></a>
 ## `mco schedule`

@@ -14,9 +14,9 @@ jobs; repeat rounds are labelled. Home refreshes at most twenty visible plans
 every thirty seconds. If a plan cannot be read, its card omits the step count.
 
 Tap a Score card to watch its read-only live drawing. Other cards open job
-details. Home polls `/api/jobs?limit=200` and `/api/agents`; it never requests an
-unbounded job board. A notice appears at the 200-job limit because older work
-may be outside this view. This is a recent-work view, not a complete history.
+details. Home polls `/api/jobs` and `/api/agents`. It reads every unarchived job,
+so older active work is not hidden behind a fixed window. Archived jobs are not
+included, so this is not a complete history.
 
 The named `HOME_STALL_MINUTES` setting in the console source is **10**. For
 leased or working jobs, the newest valid start, update, progress timestamp or

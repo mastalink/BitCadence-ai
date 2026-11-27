@@ -550,6 +550,34 @@ def test_mode_off_has_no_child_but_stays_listed(tmp_path: Path) -> None:
     assert snapshot["state"] == "stopped" and snapshot["desired"] == "off"
 
 
+def test_pane_worker_is_left_to_the_cockpit(tmp_path: Path) -> None:
+    # mode = "pane" workers run in the herdr cockpit; a supervisor copy would duplicate them.
+    clock = FakeClock()
+    adapter = FakeAdapter()
+    supervisor = make_supervisor(adapter, clock, tmp_path)
+    supervisor.reconcile({"codex-primary": worker("pane")})
+    supervisor.start("codex-primary")
+    supervisor.restart("codex-primary")
+    supervisor.reset("codex-primary")
+    clock.advance(3600)
+    supervisor.tick()
+    assert adapter.spawn_calls == []
+    snapshot = supervisor.status("codex-primary")
+    assert snapshot["state"] == "stopped" and snapshot["desired"] == "cockpit"
+    assert snapshot["last_error"] is None
+
+
+def test_moving_a_worker_to_the_cockpit_stops_the_supervisor_copy(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    supervisor = make_supervisor(adapter, FakeClock(), tmp_path)
+    supervisor.reconcile({"codex-primary": worker("waker")})
+    assert len(adapter.spawn_calls) == 1
+    supervisor.reconcile({"codex-primary": worker("pane")})
+    assert supervisor.status("codex-primary")["pid"] is None
+    supervisor.reconcile({"codex-primary": worker("waker")})
+    assert len(adapter.spawn_calls) == 2
+
+
 def test_a_failing_poll_run_counts_as_a_failure(tmp_path: Path) -> None:
     clock = FakeClock()
     adapter = FakeAdapter()

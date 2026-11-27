@@ -148,6 +148,8 @@ def plan_migration(
         note = ""
         if mode == "off":
             note = "fleet.toml has mode = off: removed, and the supervisor will not run it"
+        elif mode == "pane":
+            note = "fleet.toml has mode = pane: removed, and the cockpit runs it, not the supervisor"
         elif mode != kind:
             note = f"fleet.toml says mode = {mode}: the supervisor runs it as {mode}"
         plan.legacy.append(
@@ -159,6 +161,6 @@ def plan_migration(
     plan.workers_without_service = sorted(
         key
         for key, worker in workers.items()
-        if key not in matched and worker.mode != "off"  # type: ignore[attr-defined]
+        if key not in matched and worker.mode in {"waker", "poll"}  # type: ignore[attr-defined]
     )
     return plan

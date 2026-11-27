@@ -109,7 +109,17 @@ class WorkerRuntime:
     @property
     def desired_running(self) -> bool:
         """Desired state: fleet.toml says run, and the operator has not stopped it."""
-        return self.config.mode != "off" and self.override is None
+        return supervised(self.config) and self.override is None
+
+
+# Modes this supervisor runs. "off" is disabled; "pane" workers run inside the
+# herdr cockpit (mco.cockpit), so the supervisor must not start a second copy.
+SUPERVISED_MODES = frozenset({"waker", "poll"})
+
+
+def supervised(config: WorkerConfig) -> bool:
+    """True when this supervisor, not the cockpit or nobody, runs the worker."""
+    return config.mode in SUPERVISED_MODES
 
 
 class Supervisor:
@@ -190,14 +200,14 @@ class Supervisor:
 
                 old = runtime.config
                 runtime.config = config
-                if config.mode == "off":
+                if not supervised(config):
                     self._halt(runtime)
                 elif not runtime.desired_running:
                     # A manual stop is a durable override (R8): an unrelated
                     # config edit must not restart a worker the operator
                     # deliberately stopped.
                     continue
-                elif old.mode == "off":
+                elif not supervised(old):
                     self._begin(runtime)
                 elif self._execution_key(old) != self._execution_key(config):
                     self._halt(runtime)
@@ -222,7 +232,7 @@ class Supervisor:
             if runtime.override is not None:
                 runtime.override = None
                 self._persist_runtime(runtime)
-            if runtime.config.mode == "off" or runtime.state == WorkerState.RUNNING:
+            if not supervised(runtime.config) or runtime.state == WorkerState.RUNNING:
                 return
             if runtime.state == WorkerState.CRASHLOOPED:
                 return
@@ -242,7 +252,7 @@ class Supervisor:
             self._halt(runtime)
             runtime.override = None
             self._persist_runtime(runtime)
-            if runtime.config.mode != "off":
+            if supervised(runtime.config):
                 self._begin(runtime)
 
     def reset(self, name: str) -> None:
@@ -262,7 +272,7 @@ class Supervisor:
                 runtime.started_at = None
             runtime.state = WorkerState.STOPPED
             self._persist_runtime(runtime)
-            if runtime.config.mode != "off":
+            if supervised(runtime.config):
                 self._begin(runtime)
 
     def drain(self) -> None:
@@ -336,7 +346,7 @@ class Supervisor:
             self._spawn(runtime)
 
     def _maybe_leave_crashloop(self, runtime: WorkerRuntime, now: float) -> None:
-        if not runtime.desired_running or runtime.config.mode == "off" or self._draining:
+        if not runtime.desired_running or not supervised(runtime.config) or self._draining:
             return
         last_failure = max(runtime.failure_timestamps, default=None)
         if last_failure is not None and self.wall_clock() - last_failure < CRASHLOOP_COOLDOWN_SECONDS:
@@ -705,6 +715,9 @@ class Supervisor:
         now = self.clock()
         if runtime.config.mode == "off":
             desired = "off"
+        elif not supervised(runtime.config):
+            # mode = "pane": the cockpit runs this worker, not the supervisor.
+            desired = "cockpit"
         else:
             desired = "running" if runtime.desired_running else "stopped"
         return {

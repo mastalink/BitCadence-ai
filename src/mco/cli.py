@@ -1939,6 +1939,117 @@ def agentd_logs(
         print(line)
 
 
+cockpit_app = typer.Typer(help="One herdr session for every process and job: no console windows.")
+app.add_typer(cockpit_app, name="cockpit")
+review_app = typer.Typer(help="Send work to independent reviewers from different model families.")
+app.add_typer(review_app, name="review")
+
+
+def _cockpit_fail(exc: Exception) -> None:
+    console.print(f"[red][X] Cockpit:[/red] {exc}")
+    raise typer.Exit(code=1)
+
+
+@cockpit_app.command("up")
+def cockpit_up():
+    """Start the cockpit and every declared pane (~/.mco/cockpit.toml + fleet workers with mode=pane)."""
+    from mco import cockpit
+    try:
+        lines = cockpit.up()
+    except (cockpit.HerdrError, cockpit.CockpitConfigError) as exc:
+        _cockpit_fail(exc)
+    for line in lines:
+        console.print(line)
+
+
+@cockpit_app.command("status")
+def cockpit_status():
+    """Show declared panes and running one-off jobs."""
+    from mco import cockpit
+    try:
+        rows = cockpit.status()
+    except (cockpit.HerdrError, cockpit.CockpitConfigError) as exc:
+        _cockpit_fail(exc)
+    table = Table(title="BitCadence Cockpit")
+    for column in ("Label", "Workspace", "Running", "Pane", "Agent"):
+        table.add_column(column)
+    for row in rows:
+        table.add_row(str(row["label"]), str(row["workspace"]), "yes" if row["running"] else "no",
+                      str(row["pane"]), str(row["agent"]))
+    console.print(table)
+
+
+@cockpit_app.command("run")
+def cockpit_run(
+    label: str = typer.Argument(..., help="Unique pane label for this job, e.g. render-episode-12."),
+    command: list[str] = typer.Argument(..., help="The command and its arguments (put them after --)."),
+    workspace: str = typer.Option("jobs", "--workspace", help="Workspace to put the pane in."),
+    cwd: str = typer.Option("", "--cwd", help="Working directory for the pane."),
+    reuse: bool = typer.Option(False, "--reuse", help="Run in the existing pane with this label."),
+):
+    """Run a one-off job in its own cockpit pane instead of a new console window."""
+    from mco import cockpit
+    try:
+        pane = cockpit.run(label, command, workspace=workspace, cwd=cwd or None, reuse=reuse)
+    except (cockpit.HerdrError, cockpit.CockpitConfigError) as exc:
+        _cockpit_fail(exc)
+    console.print(f"[green][OK][/green] {label} running in pane {pane}")
+
+
+@cockpit_app.command("read")
+def cockpit_read(
+    label: str = typer.Argument(..., help="Pane label."),
+    lines: int = typer.Option(80, "--lines", help="How many recent lines."),
+):
+    """Print the recent output of a cockpit pane."""
+    from mco import cockpit
+    try:
+        h = cockpit.herdr_for(cockpit.load_cockpit())
+        pane = h.find_pane(label)
+        if not pane:
+            _cockpit_fail(cockpit.HerdrError(f"no pane labelled {label!r}"))
+        typer.echo(h.read(pane["pane_id"], lines))
+    except (cockpit.HerdrError, cockpit.CockpitConfigError) as exc:
+        _cockpit_fail(exc)
+
+
+@cockpit_app.command("attach")
+def cockpit_attach():
+    """Open the cockpit in this terminal (all workspaces, panes and agents)."""
+    import subprocess as _sp
+    from mco import cockpit
+    try:
+        h = cockpit.herdr_for(cockpit.load_cockpit())
+    except cockpit.CockpitConfigError as exc:
+        _cockpit_fail(exc)
+    if not h.exe:
+        _cockpit_fail(cockpit.HerdrError("herdr is not installed"))
+    raise typer.Exit(code=_sp.call([h.exe, "--session", h.session]))
+
+
+@review_app.command("fanout")
+def review_fanout(
+    subject: str = typer.Option(..., "--subject", help="What is being reviewed, in a few words."),
+    rubric_file: str = typer.Option(..., "--rubric-file", help="Text file with the pass bar."),
+    file: list[str] = typer.Option([], "--file", help="A file to review (repeatable)."),
+    exclude_family: list[str] = typer.Option([], "--exclude-family",
+                                             help="Model family that built the work (never reviews it)."),
+    priority: int = typer.Option(0, "--priority"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show who would be asked; post nothing."),
+):
+    """Post one review job per model family (Codex/GPT, Gemini/Antigravity, ...), skipping the builder's."""
+    from mco import reviews
+    try:
+        rubric = Path(rubric_file).read_text(encoding="utf-8")
+        posted = reviews.fanout(None if dry_run else _gateway_client(), subject, rubric, files=file,
+                                exclude_families=exclude_family, priority=priority, dry_run=dry_run)
+    except (OSError, reviews.ReviewFanoutError) as exc:
+        console.print(f"[red][X] Review fan-out:[/red] {exc}")
+        raise typer.Exit(code=1)
+    for p in posted:
+        console.print(f"{p['family']:>8}  {p['reviewer']:<16} {p['job_id'] or '(dry run)'}")
+
+
 @service_app.command("install-scheduler")
 def service_install_scheduler(
     interval: float = typer.Option(30.0, "--interval", help="Seconds between scheduler passes."),
@@ -2639,7 +2750,7 @@ def list_agents():
         table.add_column("Status", style="bold")
         table.add_column("State", style="bold")
         table.add_column("Last Seen", style="white")
-        state_styles = {"working": "[cyan]working[/cyan]", "standby": "[green]standby[/green]",
+        state_styles = {"out_of_quota": "[yellow]out of quota[/yellow]", "working": "[cyan]busy[/cyan]", "standby": "[green]standby[/green]",
                         "broken": "[red]broken[/red]", "offline": "[dim]offline[/dim]",
                         "disabled": "[yellow]disabled[/yellow]"}
 

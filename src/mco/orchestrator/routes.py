@@ -336,12 +336,22 @@ STATUS_SORT_ORDER = {
 }
 
 
+_BOARD_COLUMNS = (
+    "id,org_id,title,description,source_agent_id,source_agent_role,target_agent_role,"
+    "target_agent_id,status,leased_by_instance_id,depends_on,input_payload,created_at,"
+    "started_at,completed_at,error_message,requires_approval,approved_by,max_retries,"
+    "retry_count,escalate_to_role,archived,reassigned_from_job_id,reassigned_to_job_id,priority"
+)
+
+
 @router.get("")
 def get_jobs(
     include_archived: bool = False,
     sort: str = None,
     limit: Optional[int] = None,
     agent: dict = Depends(require_scopes("jobs:read")),
+    offset: int = 0,
+    compact: bool = False,
 ):
     """Retrieve job list from the database.
 
@@ -359,19 +369,69 @@ def get_jobs(
     if effective_sort not in ("created_desc", "created_asc", "priority_desc", "status"):
         effective_sort = "created_desc"
     try:
-        query = db_client.table("agent_jobs").select("*").eq("org_id", agent_org(agent))
-        if effective_sort == "created_asc":
-            query = query.order("created_at", desc=False)
-        elif effective_sort == "priority_desc":
-            query = query.order("priority", desc=True)
+        from mco.orchestrator.store_context import is_postgres
+
+        org = agent_org(agent)
+        offset = max(0, offset)
+        bounded = limit is not None and limit > 0
+        date_sort = effective_sort in {"created_asc", "created_desc"}
+        columns = _BOARD_COLUMNS if compact else "*"
+
+        def visible(fields):
+            query = db_client.table("agent_jobs").select(fields).eq("org_id", org)
+            if not include_archived:
+                # Older embedded documents omitted the column entirely.
+                query = query.eq("archived", False) if is_postgres(db_client) else query.in_("archived", [False, None])
+            return query
+
+        if bounded and date_sort and limit <= 500:
+            jobs = (visible(columns).order("created_at", desc=effective_sort == "created_desc").order("id")
+                    .range(offset, offset + limit - 1).execute().data or [])
         else:
-            query = query.order("created_at", desc=True)
-        if limit is not None and limit > 0:
-            query = query.limit(limit)
-        res = query.execute()
-        jobs = res.data or []
-        if not include_archived:
-            jobs = [j for j in jobs if not j.get("archived")]
+            # The cursor is monotonic even if rows are added mid-read. For
+            # custom sorts, sort small metadata first and hydrate only the window.
+            jobs, cursor = [], None
+            fields = "id,created_at,status,priority" if bounded and not date_sort else columns
+            while True:
+                query = visible(fields)
+                if cursor is not None:
+                    query = query.gt("id", cursor)
+                page = query.order("id").limit(500).execute().data or []
+                jobs.extend(page)
+                if len(page) < 500:
+                    break
+                cursor = page[-1]["id"]
+
+            if effective_sort == "created_asc":
+                jobs.sort(key=lambda j: j.get("created_at") or "")
+            elif effective_sort == "created_desc":
+                jobs.sort(key=lambda j: j.get("created_at") or "", reverse=True)
+            elif effective_sort == "priority_desc":
+                jobs.sort(key=lambda j: (j.get("priority") or 0, j.get("created_at") or ""), reverse=True)
+            else:
+                jobs.sort(key=lambda j: (
+                    STATUS_SORT_ORDER.get(j.get("status"), 99),
+                    -(j.get("priority") or 0),
+                    j.get("created_at") or "",
+                ))
+            jobs = jobs[offset:offset + limit] if bounded else jobs[offset:]
+            if fields != columns:
+                ids = [job["id"] for job in jobs]
+                found = {}
+                for start in range(0, len(ids), 100):
+                    found.update({job["id"]: job for job in
+                                  (visible(columns).in_("id", ids[start:start + 100]).execute().data or [])})
+                jobs = [found[job_id] for job_id in ids if job_id in found]
+
+        if compact:
+            active = [j for j in jobs if j["status"] in {"leased", "in_progress"}]
+            for start in range(0, len(active), 100):
+                batch = active[start:start + 100]
+                outputs = visible("id,output_payload").in_("id", [j["id"] for j in batch]).execute().data or []
+                by_id = {output["id"]: output.get("output_payload") for output in outputs}
+                for job in batch:
+                    if job["id"] in by_id:
+                        job["output_payload"] = by_id[job["id"]]
 
         # Project names live outside execution payloads. Overlay the reviewed
         # assignment for presentation while leaving the stored job untouched.
@@ -396,18 +456,6 @@ def get_jobs(
             # migration lands. The board still works and shows Unassigned.
             logger.debug("Project assignments unavailable: %s", exc)
 
-        if effective_sort == "created_asc":
-            jobs.sort(key=lambda j: j.get("created_at") or "")
-        elif effective_sort == "created_desc":
-            jobs.sort(key=lambda j: j.get("created_at") or "", reverse=True)
-        elif effective_sort == "priority_desc":
-            jobs.sort(key=lambda j: (j.get("priority") or 0, j.get("created_at") or ""), reverse=True)
-        elif effective_sort == "status":
-            jobs.sort(key=lambda j: (
-                STATUS_SORT_ORDER.get(j.get("status"), 99),
-                -(j.get("priority") or 0),
-                j.get("created_at") or "",
-            ))
         return jobs
     except Exception as e:
         logger.error(f"Error fetching jobs: {e}")
@@ -442,12 +490,60 @@ def get_approval_view_jobs(agent: dict = Depends(require_scopes("jobs:read"))):
         raise HTTPException(status_code=503, detail="Approval queue could not be read. Try again.") from exc
 
 
+@router.post("/cancel-stale")
+async def cancel_stale_jobs(payload: dict = None, agent: dict = Depends(require_scopes("jobs:approve"))):
+    """Preview old never-started work, then cancel only that reviewed snapshot."""
+    import uuid
+    from datetime import datetime, timezone, timedelta
+    from mco.orchestrator.stale import stale_candidates
+    from mco.orchestrator.audit import get_events
+    if (agent.get('role') or '').lower() not in utils_mod.get_approver_roles():
+        raise HTTPException(status_code=403, detail='Your role is not permitted to cancel jobs')
+    db = await run_in_threadpool(get_db_client)
+    if db is None:
+        raise HTTPException(status_code=400, detail='Database not configured')
+    body = payload or {}
+    org = agent_org(agent)
+    jobs = await run_in_threadpool(stale_candidates, db, org=org)
+    if body.get('dry_run', True) is not False:
+        preview_id = uuid.uuid4().hex
+        await run_in_threadpool(record_event, db, 'stale-cleanup', 'stale_cleanup_preview', agent['instance_id'], agent['role'],
+                               {'preview_id': preview_id, 'org_id': org, 'job_ids': [j['id'] for j in jobs]})
+        return {'dry_run': True, 'preview_id': preview_id, 'jobs': jobs}
+    events = await run_in_threadpool(get_events, db, 'stale-cleanup')
+    matching = [e for e in events if (e.get('detail') or {}).get('preview_id') == body.get('preview_id')
+                and e.get('actor_id') == agent['instance_id'] and (e.get('detail') or {}).get('org_id') == org]
+    from mco.orchestrator.delivery import _parse_ts
+    if (len(matching) != 1 or matching[0].get('event') != 'stale_cleanup_preview'
+            or not _parse_ts(matching[0].get('created_at'))
+            or _parse_ts(matching[0]['created_at']) < datetime.now(timezone.utc) - timedelta(minutes=15)):
+        raise HTTPException(status_code=409, detail='Preview stale jobs first; previews expire after 15 minutes and are single use')
+    ids = set(matching[0]['detail']['job_ids'])
+    await run_in_threadpool(record_event, db, 'stale-cleanup', 'stale_cleanup_used', agent['instance_id'], agent['role'],
+                           {'preview_id': body['preview_id'], 'org_id': org})
+    cancelled = []
+    for j in jobs:
+        if j['id'] not in ids:
+            continue
+        res = await run_in_threadpool(lambda: db.table('agent_jobs').update({
+            'status': 'cancelled', 'error_message': 'Reviewed stale work cleanup'
+        }).eq('id', j['id']).eq('org_id', org).eq('status', j['status'])
+          .is_('started_at', 'null').execute())
+        if res.data:
+            await run_in_threadpool(record_event, db, j['id'], 'cancelled', agent['instance_id'], agent['role'],
+                                   {'reason': 'Reviewed stale work cleanup', 'previous_status': j['status']})
+            cancelled.append(j['id'])
+            if _broadcast_callback:
+                await _broadcast_callback('job_updated', res.data[0])
+    return {'dry_run': False, 'cancelled': cancelled}
+
+
 @router.get("/project-view")
 def get_project_view_jobs(agent: dict = Depends(require_scopes("jobs:read"))):
     """Return the complete non-archived job set used by the Projects view.
 
-    The Job Board keeps its fast 100-row window. This path pages explicitly so
-    project counts and Unassigned coverage are not silently based on that page.
+    This project projection pages explicitly and reports its coverage so
+    project counts and Unassigned coverage are not silently based on one page.
     A hard ceiling prevents an unbounded console response and is reported.
     """
     db_client = get_db_client()
@@ -723,6 +819,9 @@ def _pending_for_agent(db_client, role: str, instance_id, agent: dict) -> list:
     Highest priority first, then oldest within a band - so raising one job's
     priority cannot starve equally-urgent older work.
     """
+    from mco.orchestrator.worker_policy import can_run, quota_workers
+    if instance_id in quota_workers(db_client, org=agent_org(agent)):
+        return []
     res = db_client.table("agent_jobs")        .select("*")        .eq("status", "pending")        .eq("target_agent_role", role)        .execute()
 
     filtered = []
@@ -731,6 +830,8 @@ def _pending_for_agent(db_client, role: str, instance_id, agent: dict) -> list:
             continue
         target_id = job.get("target_agent_id")
         if target_id and target_id != instance_id:
+            continue
+        if not can_run(job, role, instance_id, get_config()):
             continue
         filtered.append(job)
     filtered.sort(key=lambda j: (-_job_priority(j), j.get("created_at") or ""))
@@ -905,6 +1006,9 @@ async def lease_job(payload: dict, agent: dict = Depends(require_scopes("jobs:wr
                     status_code=403,
                     detail="Cannot lease a job not addressed to you",
                 )
+            from mco.orchestrator.worker_policy import can_run, quota_workers
+            if not can_run(j, agent['role'], agent_instance_id, get_config()) or agent_instance_id in await run_in_threadpool(quota_workers, db_client, org=agent_org(agent)):
+                raise HTTPException(status_code=403, detail='Worker lacks required capabilities or is out of quota')
 
         ttl = effective_lease_ttl(payload.get("estimated_seconds"))
         lease = await run_in_threadpool(

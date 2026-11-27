@@ -8,7 +8,7 @@ Submit new tasks to helper dropboxes, inspect real-time queue states, examine ta
 ## Step-by-Step Instructions
 
 ### 1. Open the Job Board
-In the left menu, click **Job Board**. Its heading has the same name in both copy tones. The coverage sentence states the fetched window, at most 200 latest jobs; search and counts apply to that window.
+In the left menu, click **Job Board**. Its heading has the same name in both copy tones. The sentence under the filters states how many of the unarchived jobs are shown; search and counts apply to unarchived jobs. **Preview stale jobs** lists old never-started work for review before any cancellation (see the [GUI reference](gui-reference.md#preview-and-cancel-stale-jobs)).
 
 ![Job Board Table View](img/04-console-job-board.png)
 

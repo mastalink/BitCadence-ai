@@ -175,4 +175,4 @@ def test_legacy_kind_covers_both_brands_and_nothing_else() -> None:
     for other in ("BitCadence-gateway", "BitCadence-scheduler", "BitCadence-agentd",
                   "BatonCadenceGateway", "SomeoneElse-wake-codex"):
         assert migrate.legacy_kind(other) is None
-    assert fleet.VALID_MODES == {"waker", "poll", "off"}
+    assert fleet.VALID_MODES == {"waker", "poll", "pane", "off"}
