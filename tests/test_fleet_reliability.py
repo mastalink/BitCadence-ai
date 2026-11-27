@@ -305,7 +305,8 @@ def test_recent_reroute_is_evidence_of_worker_unavailability(db):
     record_event(db, 'rerouted', delivery.REROUTED, 'delivery', 'system', {'from_instance': 'grok-renderer-a'})
     agent = {'instance_id': 'grok-renderer-a', 'role': 'grok', 'status': 'online'}
     fleet = presence.describe_fleet(db, [agent], threshold=300, connected={'grok-renderer-a'}, now=datetime.now(timezone.utc))
-    assert fleet[0]['state'] == 'broken'
+    assert fleet[0]['state'] == 'standby'
+    assert fleet[0]['routing_available'] is False
     assert presence.available_roles(fleet) == set()
 
 
@@ -335,3 +336,35 @@ def test_bundled_console_never_reparses_dom_text_as_html():
     assert 'parseFromString(' not in html
     assert '<template id="__bundler_head">' in html
     assert '<template id="__bundler_body">' in html
+
+
+def test_board_storage_windows_keep_the_full_order_on_timestamp_ties(db, monkeypatch):
+    timestamp = datetime.now(timezone.utc).isoformat()
+    for job_id in ('c', 'a', 'b'):
+        job(db, job_id, created_at=timestamp)
+    monkeypatch.setattr(routes, 'get_db_client', lambda: db)
+    agent = {'org_id': 'default'}
+    full = routes.get_jobs(agent=agent)
+    assert [item['id'] for item in full] == ['a', 'b', 'c']
+    assert routes.get_jobs(limit=1, offset=1, agent=agent) == full[1:2]
+
+
+def test_legacy_cooldown_uses_embedded_job_org(db):
+    from mco.orchestrator.audit import record_event
+    from mco.orchestrator.worker_policy import quota_workers
+    job(db, org_id='other')
+    record_event(db, 'job', 'worker_out_of_quota', 'grok-renderer-a', 'grok')
+    assert quota_workers(db) == set()
+    assert quota_workers(db, org='other') == {'grok-renderer-a'}
+
+
+def test_repeatedly_untaken_pinned_work_is_unavailable_even_without_a_fallback(db):
+    job(db)
+    config = {'MCO_DELIVERY_STALL_SECONDS': '10'}
+    delivery.sweep(db, config=config)
+    assert delivery.sweep(db, config=config).escalated == ['job']
+    agent = {'instance_id': 'grok-renderer-a', 'role': 'grok', 'status': 'online'}
+    fleet = presence.describe_fleet(db, [agent], threshold=300, connected={'grok-renderer-a'},
+                                    now=datetime.now(timezone.utc), stall_seconds=10)
+    assert fleet[0]['routing_available'] is False
+    assert presence.available_roles(fleet) == set()

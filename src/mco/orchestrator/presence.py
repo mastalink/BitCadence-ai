@@ -11,7 +11,7 @@ schema change (so LocalStore and PostgreSQL behave the same):
 
   working  - holds a lease on a job right now
   out_of_quota - a fenced worker report identified a credit/quota problem
-  broken   - an explicit worker fault or recently rerouted work
+  broken   - an explicit worker fault
   standby  - reachable and nothing waiting on it: a live waker socket, or a
              fresh heartbeat
   offline  - none of the above (and `disabled` passes through)
@@ -86,7 +86,7 @@ def describe_fleet(
     Store reads are best-effort: if jobs or events cannot be read, rows still
     get heartbeat/socket presence rather than failing the whole listing.
     """
-    from mco.orchestrator.delivery import REROUTED, get_stall_seconds
+    from mco.orchestrator.delivery import ESCALATED, REROUTED, get_stall_seconds
     from mco.orchestrator.routes import decorate_presence
 
     use_cache = now is None
@@ -107,25 +107,35 @@ def describe_fleet(
             pending = []
         try:
             since = (now - timedelta(seconds=BROKEN_WINDOW_SECONDS)).isoformat()
-            reroutes = (db.table("agent_job_events").select("*").eq("event", REROUTED)
+            delivery_events = (db.table("agent_job_events").select("*").in_("event", [REROUTED, ESCALATED])
                         .gt("created_at", since).execute().data or [])
         except Exception:
-            reroutes = []
-        return active, pending, reroutes
+            delivery_events = []
+        return active, pending, delivery_events
 
     if use_cache:
         from mco.orchestrator.fleet_cache import cached_fleet
-        active, pending, reroutes = cached_fleet(db, "evidence", None, load_evidence)
+        active, pending, delivery_events = cached_fleet(db, "evidence", None, load_evidence)
     else:
-        active, pending, reroutes = load_evidence()
+        active, pending, delivery_events = load_evidence()
 
-    working = {job.get("leased_by_instance_id") for job in active if job.get("leased_by_instance_id")}
+    working = {(job.get("org_id") or "default", job["leased_by_instance_id"])
+               for job in active if job.get("leased_by_instance_id")}
+    pending_by_id = {job["id"]: job for job in pending if not job.get("archived")}
     rerouted_from: dict[tuple, int] = {}
-    for event in reroutes:
-        source = (event.get("detail") or {}).get("from_instance")
-        if source:
-            worker = ((event.get('detail') or {}).get('org_id') or event.get('org_id') or 'default', source)
+    escalated_for: set[tuple] = set()
+    for event in delivery_events:
+        detail = event.get("detail") or {}
+        pending_job = pending_by_id.get(event.get("job_id"), {})
+        job_org = pending_job.get("org_id") or detail.get("org_id") or event.get("org_id") or "default"
+        source = detail.get("from_instance")
+        if event.get("event") == REROUTED and source:
+            worker = (job_org, source)
             rerouted_from[worker] = rerouted_from.get(worker, 0) + 1
+        elif event.get("event") == ESCALATED:
+            target = detail.get("target_agent_id")
+            if target and pending_job.get("target_agent_id") == target:
+                escalated_for.add((job_org, target))
 
     stalled = []
     if stall and stall > 0:
@@ -150,9 +160,10 @@ def describe_fleet(
         row["connected"] = live_socket
 
         reason = None
+        routing_available = True
         if raw.get("status") == DISABLED or row["effective_status"] == DISABLED:
             state = DISABLED
-        elif instance in working:
+        elif (org, instance) in working:
             state = WORKING
             reason = 'Busy with a leased job'
         elif instance in unavailable_by_org[org]:
@@ -166,21 +177,26 @@ def describe_fleet(
         else:
             waiting = [job for job in stalled if (job.get('org_id') or 'default') == org and _addressed_to(job, row)]
             moved = rerouted_from.get((org, instance), 0)
+            escalated = (org, instance) in escalated_for
             if str(row.get("role") or "").lower() in _NON_WORKER_ROLES:
                 state = STANDBY
-            elif waiting or moved:
-                state = BROKEN if moved else STANDBY
+            elif waiting or moved or escalated:
+                state = STANDBY
+                routing_available = not (moved or escalated)
                 parts = []
                 if waiting:
                     oldest = max(int((now - _parse_ts(j["created_at"])).total_seconds() // 60) for j in waiting)
                     parts.append(f"{len(waiting)} job(s) addressed to it untaken for up to {oldest} min")
                 if moved:
                     parts.append(f"{moved} job(s) rerouted away in the last hour")
+                if escalated:
+                    parts.append("Pinned work remained untaken after delivery retries")
                 reason = "; ".join(parts)
             else:
                 state = STANDBY
         row["state"] = state
         row["state_reason"] = reason
+        row["routing_available"] = routing_available and state in {STANDBY, WORKING}
         out.append(row)
     return out
 
@@ -188,4 +204,4 @@ def describe_fleet(
 def available_roles(described: Iterable[dict], org: str = "default") -> set:
     """Roles with at least one agent that can take new work now."""
     return {str(row.get("role") or "").lower() for row in described
-            if (row.get("org_id") or "default") == org and row.get("state") in {STANDBY, WORKING}}
+            if (row.get("org_id") or "default") == org and row.get("routing_available", row.get("state") in {STANDBY, WORKING})}

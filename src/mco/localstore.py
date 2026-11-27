@@ -144,7 +144,7 @@ class _Query:
         self._payload: Optional[dict] = None
         self._columns = "*"
         self._filters: List[tuple] = []      # ("eq"|"in", column, value)
-        self._order: Optional[tuple] = None  # (column, desc)
+        self._order: List[tuple] = []       # (column, desc)
         self._limit: Optional[int] = None
         self._offset: int = 0
 
@@ -190,7 +190,7 @@ class _Query:
         return self.eq(column, None if value == "null" else value)
 
     def order(self, column: str, desc: bool = False):
-        self._order = (column, desc)
+        self._order.append((column, desc))
         return self
 
     def limit(self, n: int):
@@ -347,8 +347,7 @@ class LocalStore:
     def _python_select(self, q: _Query) -> List[dict]:
         """Compatibility path: decode every row, then filter/sort/window in Python."""
         rows = [r for r in self._load_rows(q._table) if self._matches(r, q._filters)]
-        if q._order:
-            col, desc = q._order
+        for col, desc in reversed(q._order):
             rows.sort(key=lambda r: str(r.get(col) or ""), reverse=desc)
         if q._offset:
             rows = rows[q._offset:]
@@ -428,18 +427,16 @@ class LocalStore:
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
         if q._order:
-            column, desc = q._order
-            path = self._json_path(column)
-            if path is None:
-                return fallback(q)
-            # _run_once historically sorted by str(value or ""). This cast
-            # preserves that ordering for the job fields used by the API.
-            sql += f" ORDER BY CAST(COALESCE(json_extract(data, '{path}'), '') AS TEXT)"
-            sql += " DESC" if desc else " ASC"
-            # Python's former stable sort preserved the table scan's rowid
-            # order for equal values. Make that tie order explicit so LIMIT
-            # and OFFSET page boundaries cannot drift across query plans.
-            sql += ", rowid"
+            ordering = []
+            for column, desc in q._order:
+                path = self._json_path(column)
+                if path is None:
+                    return fallback(q)
+                direction = "DESC" if desc else "ASC"
+                # Match the embedded document sort's string ordering.
+                ordering.append(f"CAST(COALESCE(json_extract(data, '{path}'), '') AS TEXT) {direction}")
+            # Keep table order as the final tie-breaker for older callers.
+            sql += " ORDER BY " + ", ".join([*ordering, "rowid"])
         if q._limit is not None:
             sql += " LIMIT ?"
             params.append(q._limit)

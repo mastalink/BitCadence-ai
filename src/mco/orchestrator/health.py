@@ -263,12 +263,15 @@ def readyz(request: Request):
     else:
         checks["scheduler"] = {"ok": True, "configured": False}
     try:
-        from mco.orchestrator.presence import BROKEN, describe_fleet
+        from mco.orchestrator.presence import BROKEN, STANDBY, describe_fleet
         rows = [row for row in (db.table("agent_registry").select("*").execute().data or [])
                 if row.get("role") not in {"admin", "human", "operator"}]
         described = describe_fleet(db, rows, threshold=get_offline_after_seconds())
         online = sum(1 for row in described if row.get("status") == "online")
-        broken = sorted(row["instance_id"] for row in described if row.get("state") == BROKEN)
+        broken = sorted(
+            row["instance_id"] for row in described
+            if row.get("state") == BROKEN or (row.get("state") == STANDBY and row.get("routing_available") is False)
+        )
         checks["fleet"] = {"online_workers": online, "broken_workers": broken, "degraded": online == 0}
     except Exception:
         checks["fleet"] = {"degraded": True, "error": "presence unavailable"}

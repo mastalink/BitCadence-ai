@@ -64,7 +64,7 @@ def test_production_shell_opens_live_score_and_full_job_board():
     assert 'overview: <Home' in shell
     assert 'scoreLive: <ScoreLive' in shell
     assert 'onWatch=' in shell and 'getScoreRun(runId)' in source
-    assert 'api("/api/jobs")' in adapter
+    assert 'api("/api/jobs?compact=true")' in adapter
     assert 'api("/api/jobs?limit=200")' not in adapter
     assert '/api/score/autonomy/runs/' in adapter
     assert source.index('What needs you') < source.index("What's running")

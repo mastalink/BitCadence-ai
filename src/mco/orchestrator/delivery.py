@@ -180,7 +180,7 @@ def _online_instances(db: Any, org: str) -> list:
     rows = db.table("agent_registry").select("*").execute().data or []
     fleet = describe_fleet(db, rows, threshold=get_offline_after_seconds())
     return [(str(r.get("role") or "").lower(), r.get("instance_id")) for r in fleet
-            if (r.get("org_id") or "default") == org and r.get("state") in {STANDBY, WORKING}]
+            if (r.get("org_id") or "default") == org and r.get("routing_available", r.get("state") in {STANDBY, WORKING})]
 
 
 def _busy_instances(db: Any) -> set:
@@ -373,7 +373,7 @@ def sweep(
         record_event(db, job_id, ESCALATED, ACTOR_ID, ACTOR_ROLE,
                      {"reason": reason, "pending_seconds": int(age),
                       "target_agent_role": job.get("target_agent_role"),
-                      "target_agent_id": job.get("target_agent_id")})
+                      "target_agent_id": job.get("target_agent_id"), "org_id": org})
         result.broadcasts.append(("job_undeliverable", job))
         result.notifications.append({
             "job_id": job_id,

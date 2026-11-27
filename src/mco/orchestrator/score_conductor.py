@@ -79,7 +79,7 @@ class Conductor:
     def _fleet(self) -> dict:
         """{instance_id: {role, available, state}} from the board's presence view.
 
-        The board reports a broken worker after an explicit fault or a
+        The board signals routing ineligibility after an explicit fault or a
         recent reroute. Cache the view briefly so a sweep queries it once.
         """
         cached = getattr(self, "_fleet_cache", None)
@@ -94,7 +94,7 @@ class Conductor:
             view[agent["instance_id"]] = {
                 "role": agent.get("role"),
                 "state": state,
-                "available": online and state not in self._UNAVAILABLE_STATES,
+                "available": online and state not in self._UNAVAILABLE_STATES and agent.get("routing_available", True),
             }
         self._fleet_cache = (time.monotonic(), view)
         return view

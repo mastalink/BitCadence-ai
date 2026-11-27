@@ -108,6 +108,19 @@ def quota_workers(db, *, org='default', now=None, config=None):
         seconds = 3600
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(seconds=seconds)
     rows = db.table('agent_job_events').select('*').eq('event', _QUOTA_EVENT).gt('created_at', cutoff.isoformat()).execute().data or []
+    from mco.localstore import LocalStore
+
+    legacy_orgs = {}
+    if isinstance(db, LocalStore):
+        # Older embedded audit rows defaulted to the host org. Resolve those
+        # from their jobs, while new quota events carry signed tenant evidence.
+        legacy_ids = sorted({r['job_id'] for r in rows if r.get('job_id') and not (r.get('detail') or {}).get('org_id')})
+        for start in range(0, len(legacy_ids), 100):
+            jobs = (db.table('agent_jobs').select('id,org_id').in_('id', legacy_ids[start:start + 100])
+                    .execute().data or [])
+            legacy_orgs.update({job['id']: job['org_id'] for job in jobs})
+
     return {r['actor_id'] for r in rows
             if r.get('actor_id') and (_parse_ts(r.get('created_at')) or cutoff) > cutoff
-            and ((r.get('detail') or {}).get('org_id') or r.get('org_id') or 'default') == org}
+            and ((r.get('detail') or {}).get('org_id') or legacy_orgs.get(r.get('job_id'))
+                 or r.get('org_id') or 'default') == org}

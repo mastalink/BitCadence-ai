@@ -70,7 +70,7 @@ def test_portfolio_uses_its_aggregate_instead_of_partial_job_coverage():
 
 def test_portfolio_dataset_is_lazy_and_not_part_of_fleet_poll():
     adapter = (ROOT / "src" / "mco" / "console_src" / "47e66145-9c4d-41a1-acbb-42b12848f160.js").read_text(encoding="utf-8")
-    assert 'Promise.all([api("/api/jobs"), api("/api/agents"), refreshApprovals(version)])' in adapter
+    assert 'Promise.all([api("/api/jobs?compact=true"), api("/api/agents"), refreshApprovals(version)])' in adapter
     assert adapter.count('api("/api/portfolio")') == 1
     assert "Date.now() - portfolioFetchedAt < 30000" in adapter
     assert "page !== \"portfolio\"" in SHELL_SOURCE

@@ -385,7 +385,7 @@ def get_jobs(
             return query
 
         if bounded and date_sort and limit <= 500:
-            jobs = (visible(columns).order("created_at", desc=effective_sort == "created_desc")
+            jobs = (visible(columns).order("created_at", desc=effective_sort == "created_desc").order("id")
                     .range(offset, offset + limit - 1).execute().data or [])
         else:
             # The cursor is monotonic even if rows are added mid-read. For

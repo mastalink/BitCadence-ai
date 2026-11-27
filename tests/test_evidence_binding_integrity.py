@@ -369,43 +369,18 @@ def test_lineage_normalization_in_conductor_launch_requires(tmp_path):
     assert cond_st2["launched"] is True
 
 
-def test_get_jobs_reads_beyond_storage_page(monkeypatch):
-    class FakeDBForJobs:
-        def __init__(self):
-            self.jobs = [
-                {"id": f"j-{i}", "title": f"Job {i}", "created_at": "2026-01-01T00:00:00Z", "org_id": "default", "archived": False}
-                for i in range(550)
-            ]
-            self._start = 0
-            self._stop = None
-
-        def table(self, name):
-            return self
-
-        def select(self, *_args):
-            return self
-
-        def eq(self, col, val):
-            return self
-
-        def order(self, *_args, **_kw):
-            return self
-
-        def range(self, start, end):
-            self._start = start
-            self._stop = end + 1
-            return self
-
-        def execute(self):
-            class Res:
-                pass
-            r = Res()
-            r.data = self.jobs[self._start:self._stop]
-            return r
-
+def test_get_jobs_reads_beyond_storage_page(monkeypatch, tmp_path):
+    from mco.localstore import LocalStore
     import mco.orchestrator.routes as routes_mod
-    fake_db = FakeDBForJobs()
-    monkeypatch.setattr(routes_mod, "get_db_client", lambda: fake_db)
+
+    store = LocalStore(tmp_path / "jobs.db")
+    with store.transaction():
+        for i in range(550):
+            store.table("agent_jobs").insert({
+                "id": f"j-{i}", "title": f"Job {i}", "created_at": "2026-01-01T00:00:00Z",
+                "org_id": "default", "archived": False,
+            }).execute()
+    monkeypatch.setattr(routes_mod, "get_db_client", lambda: store)
 
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -429,6 +404,7 @@ def test_get_jobs_reads_beyond_storage_page(monkeypatch):
     res_lim = client.get("/api/jobs?limit=50")
     assert res_lim.status_code == 200
     assert len(res_lim.json()) == 50
+    store.close()
 
 
 def test_get_recent_events_reads_all_jobs_without_500_limit(monkeypatch):
