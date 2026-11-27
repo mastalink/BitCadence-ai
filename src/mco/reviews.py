@@ -47,9 +47,16 @@ def load_panel(path: Path = PANEL_CONFIG_PATH) -> tuple[Reviewer, ...]:
     if not path.exists():
         return DEFAULT_PANEL
     with path.open("rb") as handle:
-        raw = tomllib.load(handle).get("reviewer", [])
+        try:
+            raw = tomllib.load(handle).get("reviewer", [])
+        except tomllib.TOMLDecodeError as exc:
+            raise ReviewFanoutError(f"Invalid TOML in {path}: {exc}") from exc
+    if not isinstance(raw, list):
+        raise ReviewFanoutError(f"{path}: [[reviewer]] must be an array of tables")
     panel = []
-    for i, r in enumerate(raw if isinstance(raw, list) else []):
+    for i, r in enumerate(raw):
+        if not isinstance(r, dict):
+            raise ReviewFanoutError(f"{path}: reviewer #{i + 1} must be a table")
         role, family = r.get("role"), r.get("family")
         if not (isinstance(role, str) and role and isinstance(family, str) and family):
             raise ReviewFanoutError(f"{path}: reviewer #{i + 1} needs role and family")
@@ -103,7 +110,10 @@ def fanout(client: _Sender, subject: str, rubric: str, files: Sequence[str] = ()
            panel: Optional[Sequence[Reviewer]] = None, exclude_families: Iterable[str] = (),
            min_families: int = 2, priority: int = 0, dry_run: bool = False, *,
            depends_on: Sequence[str] = (), job_ids: Optional[Mapping[str, str]] = None) -> list[dict]:
-    """Post one job per chosen family, optionally with dependencies and preassigned IDs."""
+    """Post one review job per chosen reviewer. Returns ``[{reviewer, family, job_id}]``.
+
+    ``depends_on`` and ``job_ids`` (one per chosen family) are optional.
+    """
     if not subject.strip() or not rubric.strip():
         raise ReviewFanoutError("subject and rubric are required")
     reviewers = pick_reviewers(load_panel() if panel is None else panel, exclude_families,

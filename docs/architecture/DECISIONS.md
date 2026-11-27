@@ -77,22 +77,23 @@ deciding:
 | Control surface | loopback `/v1` API with separate tokens | extend for plugins, schedules, runtime |
 | Entry point / deployment | none (never deployed; a desktop tool runs it in-process) | add `runtime run`; decouple the desktop |
 
-**Verdict (R0-01, 2026-11-24): deploy agentd as the runtime; no rewrite.** `scripts/assess_agentd.py` ran every
+**Verdict (R0-01, 2026-11-24; re-run 2026-11-26 with the stricter review-driven checks, same verdict): deploy agentd as the runtime; no rewrite.** `scripts/assess_agentd.py` ran every
 check against the real supervisor and Windows adapter in an isolated home (own home directory, STOP file and mutex):
 
 | Check | Requirement | Result | Evidence |
 |---|---|---|---|
-| no-window | children and grandchildren never show a window | PASS | no new visible windows; grandchild spawned |
+| no-window | children and grandchildren never show a window | PASS | sampled every 50 ms from before the spawn: no new visible window; grandchild spawned |
 | stop-kills-tree | stopping one worker also stops what it spawned | **GAP** | child stopped; grandchild survived |
 | crash-loop | a worker that keeps dying is latched and stops restarting | PASS | crashlooped after 5 starts / 5 failures |
+| crash-loop-cooldown | after the cooldown a crash-looped worker gets a fresh set of attempts | PASS | held just before 900 s; retried just after |
 | log-drain | a child that floods its output never blocks | PASS | 25 MB writer exited |
 | log-rotation | logs rotate at 10 MB x 3 backups | **GAP** | a 26 MB log; writes bypass the handler's rollover |
 | graceful-then-deadline | stop asks politely, then kills after a deadline | PASS | break ignored; killed at 5.0 s |
-| reconcile | config changes restart only what changed; `off` stops | PASS | new pid on change; stopped on `off` |
+| reconcile | config changes restart only what changed; `off` stops | PASS | two workers: only the changed one restarted (old pid dead), the other kept its pid; stopped on `off` |
 | stop-quiesce | with STOP set nothing new is spawned | PASS | no process |
 | reap-identity | orphan reaping never kills an unrelated process that reused a recorded pid | **GAP** | an unrelated bystander with the same executable name was killed; records lack create time |
 | no-orphans-on-supervisor-death | a hard supervisor death takes the whole tree | PASS | child and grandchild gone |
-| restart-no-stale | a restarted supervisor finds nothing stale | PASS | pidfile cleared |
+| restart-no-stale | a restarted supervisor finds nothing stale | PASS | nothing left for reap_orphans to kill; pidfile cleared |
 | generic-processes | can supervise the gateway, scheduler and plugin processes | **GAP** | argv only derives from worker modes |
 
 Three gaps are small, contained fixes (kill the process tree on stop; route log writes through the rotating
