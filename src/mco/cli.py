@@ -1763,6 +1763,192 @@ def fleet_set(
     console.print(f"[green][OK][/green] {message}")
 
 
+@fleet_app.command("migrate")
+def fleet_migrate(
+    dry_run: bool = typer.Option(
+        True, "--dry-run/--no-dry-run", help="Show the plan and change nothing (the default)."
+    ),
+    apply: bool = typer.Option(False, "--apply", help="Carry the plan out. Not available in this build."),
+):
+    """Plan the move from one OS service per worker to one supervisor.
+
+    Lists every legacy per-worker service, under the current and the older
+    brand names, and what a migration would do with each. Changes nothing.
+    """
+    from mco.agentd import migrate
+
+    if apply:
+        console.print(
+            "[yellow]--apply is not available in this build.[/yellow] It stops live workers, "
+            "so it ships separately, after the supervisor has been reviewed. "
+            "Nothing was changed. Run without --apply to see the plan."
+        )
+        raise typer.Exit(code=2)
+
+    plan = migrate.plan_migration()
+    console.print("[bold]Dry run - nothing was changed.[/bold]")
+    if plan.fleet_error:
+        console.print(f"[yellow]{plan.fleet_error}[/yellow]")
+
+    if plan.legacy:
+        table = Table(title="Legacy per-worker services")
+        for column in ("Service", "Kind", "Running", "Worker in fleet.toml", "Plan", "Note"):
+            table.add_column(column)
+        for item in plan.legacy:
+            table.add_row(
+                item.name,
+                item.kind,
+                "yes" if item.running else "no",
+                item.worker or "-",
+                item.action,
+                item.note,
+            )
+        console.print(table)
+    else:
+        console.print("[green][OK][/green] No legacy per-worker services are installed.")
+
+    if plan.orphans:
+        console.print(
+            f"[yellow]{len(plan.orphans)} orphan(s)[/yellow] have no matching worker in "
+            "fleet.toml. They are left alone until you say what to do with them."
+        )
+    if plan.workers_without_service:
+        console.print(
+            "Workers in fleet.toml with no legacy service (the supervisor simply starts them): "
+            + ", ".join(plan.workers_without_service)
+        )
+    if plan.left_alone:
+        console.print("Left alone (not per-worker services): " + ", ".join(plan.left_alone))
+    console.print(
+        f"{migrate.AGENTD_SERVICE_NAME}: "
+        + ("already installed" if plan.agentd_installed else "not installed yet")
+    )
+
+    console.print("\n[bold]What --apply would do, in this order:[/bold]")
+    for number, step in enumerate(plan.steps(), start=1):
+        console.print(f"  {number}. {step}")
+    console.print("\nServices registered afterwards: " + ", ".join(plan.services_after))
+    console.print(
+        "[dim]The supervisor runs per user: workers start when you log in. "
+        "Running before login is an opt-in platform setting.[/dim]"
+    )
+
+
+agentd_app = typer.Typer(help="The one supervisor that runs every local worker for this user.")
+app.add_typer(agentd_app, name="agentd")
+
+
+def _agentd_request(method: str, path: str, *, logs: bool = False):
+    """Call this user's supervisor. Reads the token; never creates one."""
+    import httpx
+    from mco.agentd.control import CONTROL_HOST, control_port
+    from mco.agentd.tokens import AGENTD_LOG_TOKEN_PATH, AGENTD_TOKEN_PATH, sign_control_request
+
+    token_path = AGENTD_LOG_TOKEN_PATH if logs else AGENTD_TOKEN_PATH
+    try:
+        token = token_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        token = ""
+    if not token:
+        console.print("[yellow]The supervisor is not running[/yellow] (no token found). Start it with: mco agentd run")
+        raise typer.Exit(code=1)
+    base_url = f"http://{CONTROL_HOST}:{control_port()}"
+    try:
+        with httpx.Client(base_url=base_url, timeout=30.0, trust_env=False) as client:
+            challenge = client.get("/v1/auth-challenge").raise_for_status().json()["challenge"]
+            if not isinstance(challenge, str) or len(challenge) != 64 or any(
+                char not in "0123456789abcdef" for char in challenge
+            ):
+                raise ValueError("invalid agentd challenge")
+            request = client.build_request(method, path)
+            proof = sign_control_request(token, challenge, request.method, request.url.raw_path)
+            request.headers["Authorization"] = f"Agentd-HMAC {challenge}:{proof}"
+            response = client.send(request)
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        console.print("[yellow]The supervisor is unavailable or needs an upgrade.[/yellow] Start it with: mco agentd run")
+        raise typer.Exit(code=1)
+    if response.status_code >= 400:
+        console.print(f"[red][X][/red] {response.status_code}: {response.text}")
+        raise typer.Exit(code=1)
+    return response.json()
+
+
+@agentd_app.command("run")
+def agentd_run(
+    port: Optional[int] = typer.Option(None, "--port", help="Control port. Default: this user's own port."),
+):
+    """Run the supervisor in the foreground. One per user; a second copy exits."""
+    from mco.agentd.daemon import run_daemon
+
+    raise typer.Exit(code=run_daemon(port=port, say=console.print))
+
+
+@agentd_app.command("status")
+def agentd_status():
+    """Show the supervisor and every worker it owns."""
+    status = _agentd_request("GET", "/v1/status")
+    daemon = status.get("daemon", {})
+    console.print(f"Supervisor: [bold]{daemon.get('state', 'unknown')}[/bold]")
+    if daemon.get("config_error"):
+        console.print(f"[yellow]Config: {daemon['config_error']}[/yellow]")
+    for item in (daemon.get("orphans") or {}).get("left_alone", []):
+        console.print(f"[yellow]Left alone, identity not proven:[/yellow] {item}")
+    table = Table(title="Workers")
+    for column in ("Worker", "Mode", "State", "Wanted", "PID", "Restarts", "Last error"):
+        table.add_column(column)
+    for worker in status.get("workers", []):
+        table.add_row(
+            str(worker.get("name")),
+            str(worker.get("mode")),
+            str(worker.get("state")),
+            str(worker.get("desired")),
+            str(worker.get("pid") or ""),
+            str(worker.get("restarts")),
+            str(worker.get("last_error") or ""),
+        )
+    console.print(table)
+
+
+def _agentd_worker_action(action: str, worker: str) -> None:
+    result = _agentd_request("POST", f"/v1/workers/{worker}/{action}")
+    console.print(f"[green][OK][/green] {worker}: {result.get('state')} (wanted: {result.get('desired')})")
+
+
+@agentd_app.command("start")
+def agentd_start(worker: str = typer.Argument(..., help="Worker name from fleet.toml.")):
+    """Start a worker, clearing an earlier manual stop."""
+    _agentd_worker_action("start", worker)
+
+
+@agentd_app.command("stop")
+def agentd_stop(worker: str = typer.Argument(..., help="Worker name from fleet.toml.")):
+    """Stop a worker. It stays stopped, across config edits and restarts, until started."""
+    _agentd_worker_action("stop", worker)
+
+
+@agentd_app.command("restart")
+def agentd_restart(worker: str = typer.Argument(..., help="Worker name from fleet.toml.")):
+    """Restart a worker."""
+    _agentd_worker_action("restart", worker)
+
+
+@agentd_app.command("reset")
+def agentd_reset(worker: str = typer.Argument(..., help="Worker name from fleet.toml.")):
+    """Clear a crash-loop and try the worker again now."""
+    _agentd_worker_action("reset", worker)
+
+
+@agentd_app.command("logs")
+def agentd_logs(
+    worker: Optional[str] = typer.Argument(None, help="Worker name; omit for every worker."),
+    tail: int = typer.Option(100, "--tail", help="How many lines."),
+):
+    """Show recent worker output. Uses the separate log-reading token."""
+    query = f"?tail={tail}" + (f"&worker={worker}" if worker else "")
+    for line in _agentd_request("GET", f"/v1/logs{query}", logs=True).get("lines", []):
+        print(line)
+
+
 cockpit_app = typer.Typer(help="One herdr session for every process and job: no console windows.")
 app.add_typer(cockpit_app, name="cockpit")
 review_app = typer.Typer(help="Send work to independent reviewers from different model families.")
@@ -2621,13 +2807,14 @@ def list_agents():
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. Governance: workflows, audit trail, approval gates
 # ─────────────────────────────────────────────────────────────────────────────
-def _gateway_client():
+def _gateway_client(*, gateway_url: Optional[str] = None):
     """GatewayClient resolved from the full config stack, not just os.environ.
 
     Reads MCO_GATEWAY_URL / MCO_AGENT_TOKEN / AGENT_ROLE / AGENT_INSTANCE_ID
     from get_config() (which layers .env + the AES-256-GCM secret store over
     the OS environment), so `mco workflow|approve|sync|...` work from any shell
     once the token is in .env or the vault - no per-shell `set` required.
+    An explicit gateway URL overrides the configured URL.
 
     Local-Only zero-config: the gateway seeds its operator agent from
     MCO_LOCAL_TOKEN, so when no explicit MCO_AGENT_TOKEN is configured we fall
@@ -2639,7 +2826,7 @@ def _gateway_client():
     config = get_config()
     token = config.get("MCO_AGENT_TOKEN") or config.get("MCO_LOCAL_TOKEN") or None
     return GatewayClient(
-        base_url=config.get("MCO_GATEWAY_URL") or None,
+        base_url=gateway_url or config.get("MCO_GATEWAY_URL") or None,
         token=token,
         role=config.get("AGENT_ROLE") or None,
         instance_id=config.get("AGENT_INSTANCE_ID") or None,
@@ -3688,6 +3875,95 @@ def advanced(ctx: typer.Context):
     except click.ClickException as e:
         e.show()
         raise typer.Exit(code=e.exit_code)
+
+
+handoff_app = typer.Typer(help="Post and reconcile a build program.")
+app.add_typer(handoff_app, name="handoff")
+
+
+def _run_handoff(command: str, program: Path, config: Optional[Path],
+                 dry_run: bool = False, interval: float = 30.0) -> None:
+    import time
+
+    import httpx
+
+    from mco.handoff import DEFAULT_CONFIG, GitHub, Harness, load_deployment, load_program
+
+    try:
+        plan = load_program(program)
+        config = config or DEFAULT_CONFIG
+        if dry_run and not config.exists():
+            for package in plan.initial_ready():
+                typer.echo(f"{package.id}  {package.title}  (initial ready)")
+            return
+        harness = Harness(plan, load_deployment(config), _gateway_client(), GitHub())
+        if command == "post":
+            states = harness.post(dry_run=dry_run)
+            for package_id, state in states.items():
+                if not dry_run or state == "ready to post":
+                    typer.echo(f"{package_id}  {plan.packages[package_id].title}  ({state})")
+            return
+        previous = {}
+        while True:
+            try:
+                states = harness.status() if command == "status" else harness.advance()
+            except (OSError, RuntimeError, httpx.HTTPError) as exc:
+                if command != "watch" or (isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 500):
+                    raise
+                typer.echo(f"Handoff pass failed: {exc}. Retrying next pass.", err=True)
+                time.sleep(interval)
+                continue
+            for package_id, state in states.items():
+                if previous.get(package_id) != state:
+                    typer.echo(f"{package_id}  {state}")
+            if command != "watch":
+                return
+            previous = states
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        if command != "watch":
+            raise
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError, httpx.HTTPError) as exc:
+        typer.echo(f"Handoff error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+
+@handoff_app.command("post")
+def handoff_post(
+    program: Path = typer.Option(..., "--program", help="Path to the build program TOML."),
+    config: Optional[Path] = typer.Option(None, "--config", help="Private handoff configuration."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show ready builds without posting."),
+):
+    """Post builds whose dependencies have merged."""
+    _run_handoff("post", program, config, dry_run=dry_run)
+
+
+@handoff_app.command("status")
+def handoff_status(
+    program: Path = typer.Option(..., "--program", help="Path to the build program TOML."),
+    config: Optional[Path] = typer.Option(None, "--config", help="Private handoff configuration."),
+):
+    """Read package and PR state without posting."""
+    _run_handoff("status", program, config)
+
+
+@handoff_app.command("advance")
+def handoff_advance(
+    program: Path = typer.Option(..., "--program", help="Path to the build program TOML."),
+    config: Optional[Path] = typer.Option(None, "--config", help="Private handoff configuration."),
+):
+    """Advance the build program by one pass."""
+    _run_handoff("advance", program, config)
+
+
+@handoff_app.command("watch")
+def handoff_watch(
+    program: Path = typer.Option(..., "--program", help="Path to the build program TOML."),
+    config: Optional[Path] = typer.Option(None, "--config", help="Private handoff configuration."),
+    interval: float = typer.Option(30.0, "--interval", min=1.0, help="Seconds between foreground passes."),
+):
+    """Advance the program repeatedly in the foreground."""
+    _run_handoff("watch", program, config, interval=interval)
 
 
 def main():

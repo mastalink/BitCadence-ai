@@ -4,6 +4,7 @@ The only difference from ``bitcadence runtime run`` is a test-private singleton 
 for this user is neither disturbed nor in the way. The caller points HOME / USERPROFILE at a temporary directory.
 
     python runtime_driver.py <mutex-suffix> <control-port> gateway <gateway-port>
+    python runtime_driver.py <mutex-suffix> <control-port> gateway-scheduler <gateway-port>
     python runtime_driver.py <mutex-suffix> <control-port> stub <stub-script>
 """
 
@@ -22,8 +23,8 @@ def main() -> int:
     paths = RuntimePaths()
     lock = WindowsSupervisorLock(paths.home / "agentd.lock")
     lock.name = f"Local\\BitCadence-runtime-test-{suffix}"
-    if kind == "gateway":
-        services = default_services(scheduler=False, gateway_port=int(argument))
+    if kind in {"gateway", "gateway-scheduler"}:
+        services = default_services(scheduler=kind == "gateway-scheduler", gateway_port=int(argument))
     else:
         services = [ServiceProcess("stub", (sys.executable, argument, "service"))]
     runtime = Runtime(

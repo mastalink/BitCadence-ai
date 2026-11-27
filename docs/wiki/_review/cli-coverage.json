@@ -186,6 +186,525 @@
       "ignore_unknown_options": true
     },
     {
+      "path": "mco agentd",
+      "aliases": [
+        "bitcadence agentd"
+      ],
+      "anchor": "cli-mco-agentd",
+      "group": true,
+      "hidden": false,
+      "help": "The one supervisor that runs every local worker for this user.",
+      "source": null,
+      "line": null,
+      "inherited_groups": [
+        "mco"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco agentd logs",
+      "aliases": [
+        "bitcadence agentd logs"
+      ],
+      "anchor": "cli-mco-agentd-logs",
+      "group": false,
+      "hidden": false,
+      "help": "Show recent worker output. Uses the separate log-reading token.",
+      "source": "src/mco/cli.py",
+      "line": 1924,
+      "inherited_groups": [
+        "mco",
+        "mco agentd"
+      ],
+      "parameters": [
+        {
+          "name": "worker",
+          "kind": "argument",
+          "tokens": [
+            "worker"
+          ],
+          "type": "TEXT",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Worker name; omit for every worker.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-logs-param-worker"
+        },
+        {
+          "name": "tail",
+          "kind": "option",
+          "tokens": [
+            "--tail"
+          ],
+          "type": "INTEGER",
+          "required": false,
+          "default": 100,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "How many lines.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-logs-param-tail"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-logs-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco agentd reset",
+      "aliases": [
+        "bitcadence agentd reset"
+      ],
+      "anchor": "cli-mco-agentd-reset",
+      "group": false,
+      "hidden": false,
+      "help": "Clear a crash-loop and try the worker again now.",
+      "source": "src/mco/cli.py",
+      "line": 1918,
+      "inherited_groups": [
+        "mco",
+        "mco agentd"
+      ],
+      "parameters": [
+        {
+          "name": "worker",
+          "kind": "argument",
+          "tokens": [
+            "worker"
+          ],
+          "type": "TEXT",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Worker name from fleet.toml.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-reset-param-worker"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-reset-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco agentd restart",
+      "aliases": [
+        "bitcadence agentd restart"
+      ],
+      "anchor": "cli-mco-agentd-restart",
+      "group": false,
+      "hidden": false,
+      "help": "Restart a worker.",
+      "source": "src/mco/cli.py",
+      "line": 1912,
+      "inherited_groups": [
+        "mco",
+        "mco agentd"
+      ],
+      "parameters": [
+        {
+          "name": "worker",
+          "kind": "argument",
+          "tokens": [
+            "worker"
+          ],
+          "type": "TEXT",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Worker name from fleet.toml.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-restart-param-worker"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-restart-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco agentd run",
+      "aliases": [
+        "bitcadence agentd run"
+      ],
+      "anchor": "cli-mco-agentd-run",
+      "group": false,
+      "hidden": false,
+      "help": "Run the supervisor in the foreground. One per user; a second copy exits.",
+      "source": "src/mco/cli.py",
+      "line": 1859,
+      "inherited_groups": [
+        "mco",
+        "mco agentd"
+      ],
+      "parameters": [
+        {
+          "name": "port",
+          "kind": "option",
+          "tokens": [
+            "--port"
+          ],
+          "type": "INTEGER",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Control port. Default: this user's own port.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-run-param-port"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-run-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco agentd start",
+      "aliases": [
+        "bitcadence agentd start"
+      ],
+      "anchor": "cli-mco-agentd-start",
+      "group": false,
+      "hidden": false,
+      "help": "Start a worker, clearing an earlier manual stop.",
+      "source": "src/mco/cli.py",
+      "line": 1900,
+      "inherited_groups": [
+        "mco",
+        "mco agentd"
+      ],
+      "parameters": [
+        {
+          "name": "worker",
+          "kind": "argument",
+          "tokens": [
+            "worker"
+          ],
+          "type": "TEXT",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Worker name from fleet.toml.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-start-param-worker"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-start-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco agentd status",
+      "aliases": [
+        "bitcadence agentd status"
+      ],
+      "anchor": "cli-mco-agentd-status",
+      "group": false,
+      "hidden": false,
+      "help": "Show the supervisor and every worker it owns.",
+      "source": "src/mco/cli.py",
+      "line": 1869,
+      "inherited_groups": [
+        "mco",
+        "mco agentd"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-status-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco agentd stop",
+      "aliases": [
+        "bitcadence agentd stop"
+      ],
+      "anchor": "cli-mco-agentd-stop",
+      "group": false,
+      "hidden": false,
+      "help": "Stop a worker. It stays stopped, across config edits and restarts, until started.",
+      "source": "src/mco/cli.py",
+      "line": 1906,
+      "inherited_groups": [
+        "mco",
+        "mco agentd"
+      ],
+      "parameters": [
+        {
+          "name": "worker",
+          "kind": "argument",
+          "tokens": [
+            "worker"
+          ],
+          "type": "TEXT",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Worker name from fleet.toml.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-stop-param-worker"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-agentd-stop-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
       "path": "mco agents",
       "aliases": [
         "bitcadence agents"
@@ -2653,6 +3172,99 @@
       "ignore_unknown_options": false
     },
     {
+      "path": "mco fleet migrate",
+      "aliases": [
+        "bitcadence fleet migrate"
+      ],
+      "anchor": "cli-mco-fleet-migrate",
+      "group": false,
+      "hidden": false,
+      "help": "Plan the move from one OS service per worker to one supervisor.\n\nLists every legacy per-worker service, under the current and the older\nbrand names, and what a migration would do with each. Changes nothing.",
+      "source": "src/mco/cli.py",
+      "line": 1756,
+      "inherited_groups": [
+        "mco",
+        "mco fleet"
+      ],
+      "parameters": [
+        {
+          "name": "dry_run",
+          "kind": "option",
+          "tokens": [
+            "--dry-run",
+            "--no-dry-run"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": true,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show the plan and change nothing (the default).",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-fleet-migrate-param-dry-run"
+        },
+        {
+          "name": "apply",
+          "kind": "option",
+          "tokens": [
+            "--apply"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": false,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Carry the plan out. Not available in this build.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-fleet-migrate-param-apply"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-fleet-migrate-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
       "path": "mco fleet set",
       "aliases": [
         "bitcadence fleet set"
@@ -2898,6 +3510,465 @@
           "path_readable": null,
           "path_writable": null,
           "anchor": "cli-mco-gui-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco handoff",
+      "aliases": [
+        "bitcadence handoff"
+      ],
+      "anchor": "cli-mco-handoff",
+      "group": true,
+      "hidden": false,
+      "help": "Post and reconcile a build program.",
+      "source": null,
+      "line": null,
+      "inherited_groups": [
+        "mco"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco handoff advance",
+      "aliases": [
+        "bitcadence handoff advance"
+      ],
+      "anchor": "cli-mco-handoff-advance",
+      "group": false,
+      "hidden": false,
+      "help": "Advance the build program by one pass.",
+      "source": "src/mco/cli.py",
+      "line": 3635,
+      "inherited_groups": [
+        "mco",
+        "mco handoff"
+      ],
+      "parameters": [
+        {
+          "name": "program",
+          "kind": "option",
+          "tokens": [
+            "--program"
+          ],
+          "type": "PATH",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Path to the build program TOML.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-advance-param-program"
+        },
+        {
+          "name": "config",
+          "kind": "option",
+          "tokens": [
+            "--config"
+          ],
+          "type": "PATH",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Private handoff configuration.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-advance-param-config"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-advance-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco handoff post",
+      "aliases": [
+        "bitcadence handoff post"
+      ],
+      "anchor": "cli-mco-handoff-post",
+      "group": false,
+      "hidden": false,
+      "help": "Post builds whose dependencies have merged.",
+      "source": "src/mco/cli.py",
+      "line": 3616,
+      "inherited_groups": [
+        "mco",
+        "mco handoff"
+      ],
+      "parameters": [
+        {
+          "name": "program",
+          "kind": "option",
+          "tokens": [
+            "--program"
+          ],
+          "type": "PATH",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Path to the build program TOML.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-post-param-program"
+        },
+        {
+          "name": "config",
+          "kind": "option",
+          "tokens": [
+            "--config"
+          ],
+          "type": "PATH",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Private handoff configuration.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-post-param-config"
+        },
+        {
+          "name": "dry_run",
+          "kind": "option",
+          "tokens": [
+            "--dry-run"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": false,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show ready builds without posting.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-post-param-dry-run"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-post-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco handoff status",
+      "aliases": [
+        "bitcadence handoff status"
+      ],
+      "anchor": "cli-mco-handoff-status",
+      "group": false,
+      "hidden": false,
+      "help": "Read package and PR state without posting.",
+      "source": "src/mco/cli.py",
+      "line": 3626,
+      "inherited_groups": [
+        "mco",
+        "mco handoff"
+      ],
+      "parameters": [
+        {
+          "name": "program",
+          "kind": "option",
+          "tokens": [
+            "--program"
+          ],
+          "type": "PATH",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Path to the build program TOML.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-status-param-program"
+        },
+        {
+          "name": "config",
+          "kind": "option",
+          "tokens": [
+            "--config"
+          ],
+          "type": "PATH",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Private handoff configuration.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-status-param-config"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-status-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco handoff watch",
+      "aliases": [
+        "bitcadence handoff watch"
+      ],
+      "anchor": "cli-mco-handoff-watch",
+      "group": false,
+      "hidden": false,
+      "help": "Advance the program repeatedly in the foreground.",
+      "source": "src/mco/cli.py",
+      "line": 3644,
+      "inherited_groups": [
+        "mco",
+        "mco handoff"
+      ],
+      "parameters": [
+        {
+          "name": "program",
+          "kind": "option",
+          "tokens": [
+            "--program"
+          ],
+          "type": "PATH",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Path to the build program TOML.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-watch-param-program"
+        },
+        {
+          "name": "config",
+          "kind": "option",
+          "tokens": [
+            "--config"
+          ],
+          "type": "PATH",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Private handoff configuration.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-handoff-watch-param-config"
+        },
+        {
+          "name": "interval",
+          "kind": "option",
+          "tokens": [
+            "--interval"
+          ],
+          "type": "FLOAT RANGE",
+          "required": false,
+          "default": 30.0,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Seconds between foreground passes.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": 1.0,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-watch-param-interval"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-handoff-watch-param-help"
         }
       ],
       "allow_extra_args": false,
@@ -5272,8 +6343,8 @@
       "group": true,
       "hidden": false,
       "help": "The background runtime that owns the gateway, the scheduler and the workers.",
-      "source": null,
-      "line": null,
+      "source": "src/mco/runtime/cli.py",
+      "line": 16,
       "inherited_groups": [
         "mco"
       ],
@@ -5316,7 +6387,7 @@
       "hidden": false,
       "help": "Maintenance mode: the runtime stays up, its children are stopped and schedules are held.",
       "source": "src/mco/runtime/cli.py",
-      "line": 111,
+      "line": 115,
       "inherited_groups": [
         "mco",
         "mco runtime"
@@ -5384,7 +6455,7 @@
       "hidden": false,
       "help": "Restore the previous last-known-good fleet configuration.",
       "source": "src/mco/runtime/cli.py",
-      "line": 136,
+      "line": 140,
       "inherited_groups": [
         "mco",
         "mco runtime"
@@ -5428,7 +6499,7 @@
       "hidden": false,
       "help": "Run the runtime in the foreground. Exit 0 only after a deliberate stop; non-zero means it crashed.",
       "source": "src/mco/runtime/cli.py",
-      "line": 51,
+      "line": 55,
       "inherited_groups": [
         "mco",
         "mco runtime"
@@ -5570,7 +6641,7 @@
       "hidden": false,
       "help": "Show the runtime's state. Exit 1 when it should be running and is not (crashed, dead or silent).",
       "source": "src/mco/runtime/cli.py",
-      "line": 93,
+      "line": 97,
       "inherited_groups": [
         "mco",
         "mco runtime"
@@ -5638,7 +6709,7 @@
       "hidden": false,
       "help": "Stop the runtime and its children deliberately (it exits 0 and is not restarted).",
       "source": "src/mco/runtime/cli.py",
-      "line": 69,
+      "line": 73,
       "inherited_groups": [
         "mco",
         "mco runtime"
@@ -7617,7 +8688,7 @@
           "nargs": 1,
           "is_flag": true,
           "hidden": false,
-          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start — a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
+          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start \u2014 a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
           "prompt": null,
           "envvar": null,
           "choices": null,
@@ -7945,7 +9016,7 @@
           "nargs": 1,
           "is_flag": true,
           "hidden": false,
-          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start — a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
+          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start \u2014 a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
           "prompt": null,
           "envvar": null,
           "choices": null,

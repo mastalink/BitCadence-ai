@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import subprocess
+from threading import Event
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -80,6 +84,65 @@ def test_replacing_the_config_over_the_api_keeps_the_services(running):
     assert response.status_code == 200, response.text
     assert runtime.adapter.alive() == ["beta-program", "gateway-program", "scheduler-program"]
     assert len(runtime.config.store.generations()) == 2
+
+
+def test_mutations_are_rejected_while_a_child_ignores_graceful_shutdown(running, monkeypatch):
+    runtime, client = running
+    generation = client.get("/v1/config", headers=AUTH).json()["generation"]
+    child = runtime.adapter.latest("alpha-program")
+    waiting = Event()
+    allow_kill = Event()
+    original_wait = child.wait
+
+    def wait(timeout):
+        if child.poll() is None:
+            waiting.set()
+            allow_kill.wait(min(timeout, 3))
+            raise subprocess.TimeoutExpired("alpha-program", timeout)
+        return original_wait(timeout)
+
+    monkeypatch.setattr(child, "terminate", lambda: None)
+    monkeypatch.setattr(child, "wait", wait)
+    server = SimpleNamespace(should_exit=False)
+    monkeypatch.setattr(runtime, "_server", server)
+    original_spawns = list(runtime.adapter.spawns)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        assert client.post("/v1/runtime/stop", headers=AUTH).status_code == 200
+        shutdown = pool.submit(runtime.shutdown)
+        try:
+            assert waiting.wait(3)
+            response = client.post("/v1/runtime/maintenance", headers=AUTH, json={"enabled": False})
+            assert response.status_code == 409, response.text
+            assert server.should_exit
+            assert not shutdown.done()
+            for path in ("/v1/runtime/rollback", "/v1/workers/alpha/start",
+                         "/v1/workers/alpha/restart", "/v1/workers/alpha/reset",
+                         "/v1/workers/alpha/stop", "/v1/drain", "/v1/resume", "/v1/reload"):
+                assert client.post(path, headers=AUTH).status_code == 409, path
+            assert client.put("/v1/config", headers={**AUTH, "If-Match": generation},
+                              json={"content": fleet("beta")}).status_code == 409
+        finally:
+            allow_kill.set()
+            shutdown.result(timeout=5)
+
+    assert child.returncode == -9
+    assert runtime.adapter.spawns == original_spawns
+    assert runtime.adapter.released == 1
+    assert runtime.adapter.alive() == []
+
+
+def test_scheduler_child_uses_the_supervised_gateway_port(monkeypatch):
+    from mco import cli
+    from mco.runtime import scheduler_child
+    from mco.runtime.supervision import default_services
+
+    monkeypatch.setattr(cli, "get_config", lambda: {"MCO_GATEWAY_URL": "http://127.0.0.1:18789"})
+    clients = []
+    monkeypatch.setattr(launcher, "run_forever", lambda client, **_: clients.append(client))
+    gateway, scheduler = default_services(gateway_port=19876)
+    assert gateway.argv[-2:] == ("--port", "19876")
+    assert scheduler_child.main(list(scheduler.argv[3:])) == 0
+    assert clients[0].base_url == "http://127.0.0.1:19876"
 
 
 @pytest.fixture
@@ -179,8 +242,12 @@ def test_the_scheduler_child_holds_every_fire_while_stop_is_set(monkeypatch, sto
     from mco.runtime import scheduler_child
 
     seen = {}
-    monkeypatch.setattr(cli, "_gateway_client", lambda: "client")
-    monkeypatch.setattr(logging_setup, "configure_logging", lambda: None)
+    monkeypatch.setattr(cli, "_gateway_client", lambda **_: "client")
+
+    def unexpected_file_logging():
+        pytest.fail("the scheduler opened the gateway's rotating log")
+
+    monkeypatch.setattr(logging_setup, "configure_logging", unexpected_file_logging)
     monkeypatch.setattr(launcher, "run_forever", lambda client, **options: seen.update(options, client=client))
     assert scheduler_child.main(["--interval", "5"]) == 0
     assert seen["client"] == "client" and seen["interval"] == 5

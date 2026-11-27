@@ -10,9 +10,13 @@ import typer
 
 
 runtime_app = typer.Typer(
-    help="The background runtime that owns the gateway, the scheduler and the workers.",
     no_args_is_help=True,
 )
+
+@runtime_app.callback()
+def runtime_group() -> None:
+    """The background runtime that owns the gateway, the scheduler and the workers."""
+
 
 # States in which a runtime process is there to be talked to.
 LIVE_STATES = {"running", "quiesced", "maintenance", "stale"}

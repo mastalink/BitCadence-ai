@@ -166,6 +166,30 @@ def test_kill_gateway_is_restarted(live):
     assert second != first
 
 
+def test_gateway_and_scheduler_run_together_on_a_custom_port(live):
+    port = free_port()
+    live.start("gateway-scheduler", str(port))
+    gateway_pid = live.child_pid("runtime:gateway")
+    scheduler_pid = live.child_pid("runtime:scheduler")
+
+    def healthy():
+        try:
+            response = httpx.get(f"http://127.0.0.1:{port}/healthz", timeout=1, trust_env=False)
+        except httpx.HTTPError:
+            return False
+        return response.status_code == 200
+
+    wait_for(healthy, "the gateway to answer while the scheduler is running", 90)
+    scheduler = psutil.Process(scheduler_pid)
+    assert scheduler.cmdline()[-2:] == ["--gateway-url", f"http://127.0.0.1:{port}"]
+    assert not gone(gateway_pid) and not gone(scheduler_pid)
+
+    stop = live.cli("stop")
+    assert stop.returncode == 0, stop.stdout + stop.stderr
+    assert live.process.wait(timeout=30) == 0
+    wait_for(lambda: gone(gateway_pid) and gone(scheduler_pid), "both services to stop", 20)
+
+
 def test_corrupt_fleet_toml_keeps_the_last_known_good(live):
     live.paths.fleet.write_text(live.fleet("alpha"), encoding="utf-8")
     live.start()

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Optional, Protocol, Sequence
+from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence
 
 try:  # pragma: no cover - exercised by interpreter version
     import tomllib
@@ -67,7 +67,8 @@ VERDICT_CONTRACT = (
     "Reply with ONE JSON object and nothing else:\n"
     '{"verdict": "pass" | "fail", "findings": [{"where": "...", "problem": "...", "fix": "..."}], '
     '"notes": "what you actually inspected"}\n'
-    "Fail only for a concrete problem you can point at. Never claim to have watched, listened to or opened "
+    "Fail only for a concrete problem you can point at. A pass may list non-blocking findings; "
+    "they go to the merge approver as notes and do not start a fix round. Never claim to have watched, listened to or opened "
     "something you did not."
 )
 
@@ -108,12 +109,20 @@ def review_prompt(subject: str, rubric: str, files: Sequence[str]) -> str:
 
 def fanout(client: _Sender, subject: str, rubric: str, files: Sequence[str] = (),
            panel: Optional[Sequence[Reviewer]] = None, exclude_families: Iterable[str] = (),
-           min_families: int = 2, priority: int = 0, dry_run: bool = False) -> list[dict]:
-    """Post one review job per chosen reviewer. Returns ``[{reviewer, family, job_id}]``."""
+           min_families: int = 2, priority: int = 0, dry_run: bool = False, *,
+           depends_on: Sequence[str] = (), job_ids: Optional[Mapping[str, str]] = None) -> list[dict]:
+    """Post one review job per chosen reviewer. Returns ``[{reviewer, family, job_id}]``.
+
+    ``depends_on`` and ``job_ids`` (one per chosen family) are optional.
+    """
     if not subject.strip() or not rubric.strip():
         raise ReviewFanoutError("subject and rubric are required")
     reviewers = pick_reviewers(load_panel() if panel is None else panel, exclude_families,
                                min_families=min_families)
+    if job_ids is not None:
+        chosen_ids = [job_ids.get(r.family.lower()) for r in reviewers]
+        if not all(chosen_ids) or len(set(chosen_ids)) != len(chosen_ids):
+            raise ReviewFanoutError("supply a distinct job ID for every chosen family")
     prompt = review_prompt(subject, rubric, files)
     posted = []
     for r in reviewers:
@@ -122,6 +131,15 @@ def fanout(client: _Sender, subject: str, rubric: str, files: Sequence[str] = ()
         if dry_run:
             posted.append({"reviewer": who, "family": r.family, "job_id": None})
             continue
-        job = client.send(r.role, title, prompt, to_instance=r.instance, priority=priority)
-        posted.append({"reviewer": who, "family": r.family, "job_id": (job or {}).get("id")})
+        options = {}
+        if depends_on:
+            options["depends_on"] = list(depends_on)
+        if job_ids is not None:
+            options["job_id"] = job_ids[r.family.lower()]
+        response = client.send(r.role, title, prompt, to_instance=r.instance, priority=priority, **options)
+        response = response or {}
+        job = response.get("job") or response
+        if job_ids is not None and job.get("id") != options["job_id"]:
+            raise ReviewFanoutError(f"board did not confirm the requested review job ID for {r.family}")
+        posted.append({"reviewer": who, "family": r.family, "job_id": job.get("id")})
     return posted

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from contextlib import contextmanager
+from typing import Any, Iterator, TYPE_CHECKING
 
 from fastapi import FastAPI, HTTPException
 from fastapi.routing import APIRoute
@@ -28,12 +29,20 @@ def default_control_port() -> int:
 
 
 def create_runtime_app(runtime: "Runtime") -> FastAPI:
+    @contextmanager
+    def mutation() -> Iterator[None]:
+        with runtime._state_lock:
+            if runtime._stop.is_set():
+                raise HTTPException(status_code=409, detail="runtime is stopping")
+            yield
+
     app = agentd_control.create_control_app(
         runtime.supervisor,
         runtime.manager,
         runtime.config,  # type: ignore[arg-type]  # same surface as FleetWatcher
         runtime.logs,
         token_store=runtime.token_store,
+        mutation=mutation,
     )
     # Exactly the authentication the agentd routes use: no second, weaker door.
     protected = next(
@@ -53,18 +62,20 @@ def create_runtime_app(runtime: "Runtime") -> FastAPI:
 
     @app.post("/v1/runtime/maintenance", dependencies=protected)
     def set_maintenance(request: MaintenanceRequest) -> dict[str, object]:
-        runtime.set_maintenance(request.enabled)
-        return runtime.document()
+        with mutation():
+            runtime.set_maintenance(request.enabled)
+            return runtime.document()
 
     @app.post("/v1/runtime/rollback", dependencies=protected)
     def rollback() -> dict[str, object]:
-        try:
-            runtime.config.rollback()
-        except RollbackUnavailable as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except Exception as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return runtime.document()
+        with mutation():
+            try:
+                runtime.config.rollback()
+            except RollbackUnavailable as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            except Exception as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            return runtime.document()
 
     return app
 

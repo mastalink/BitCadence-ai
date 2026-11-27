@@ -1,0 +1,31 @@
+# Copy to ~/.mco/deployment/handoff.toml and replace the synthetic instances.
+# Keys under builders are the program's builder roles.
+[builders]
+codex = "example-builder"
+
+# Keys under reviewers are model families. Medium and higher risks need three
+# distinct non-builder families. Keep these assignments stable during a run.
+[reviewers.claude]
+role = "claude"
+instance = "example-review-1"
+
+[reviewers.gemini]
+role = "antigravity"
+instance = "example-review-2"
+
+[reviewers.grok]
+role = "grok"
+instance = "example-review-3"
+
+# In a separate ~/.mco/deployment/repos.toml, map each logical repository
+# to its GitHub slug and optional PR base (defaults to "main"):
+# [repos.bitcadence]
+# github = "example-labs/demo"
+# base = "main"
+# [repos.private-content]
+# github = "example-labs/private-demo"
+
+# Use one gateway identity for post, advance, status, and watch. It must be
+# able to create and read the program's jobs. Changing a package's job intent
+# requires a new program namespace; gateway replay matches the original intent.
+# The gateway's approver policy controls who may approve merge/activation.

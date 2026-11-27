@@ -104,8 +104,10 @@ class Runtime:
             options["lock_dir"] = self.paths.home / "locks"  # shared with any other owner of these workers
         if "foreign_owner" in inspect.signature(Supervisor.__init__).parameters:
             options["foreign_owner"] = self._foreign_owner  # never a second copy of a worker run by something else
+        self._stop = threading.Event()
         self.supervisor = RuntimeSupervisor(
             self.adapter,
+            stopping=self._stop,
             services=default_services() if services is None else services,
             **options,
         )
@@ -118,7 +120,6 @@ class Runtime:
         )
         self.started_at = time.time()
         self.stop_reason: str | None = None
-        self._stop = threading.Event()
         self._state_lock = threading.RLock()
         self._next_heartbeat = 0.0
         self._last_reported: tuple[object, ...] | None = None
@@ -203,12 +204,13 @@ class Runtime:
         # From here on this process is the owner, and may write the runtime's files.
         if self.control_port is None:
             self.control_port = default_control_port()
-        if self.serve_control:
-            self._start_control()
-        if self.paths.maintenance.exists():
-            self.supervisor.held = True
-        self.config.load_initial()
-        self.write_heartbeat()
+        with self._state_lock:
+            if self.serve_control:
+                self._start_control()
+            if self.paths.maintenance.exists():
+                self.supervisor.held = True
+            self.config.load_initial()
+            self.write_heartbeat()
         self.note(f"runtime started, state {self.state}")
 
     def _start_control(self) -> None:
@@ -239,6 +241,8 @@ class Runtime:
         if self._server_thread is not None and not self._server_thread.is_alive():
             raise ControlServerDied("the control API stopped unexpectedly")
         with self._state_lock:
+            if self._stop.is_set():
+                return
             self.config.poll()
             self.supervisor.tick()
         reported = (self.state, self.config.generation, self.config.last_error)
@@ -247,10 +251,14 @@ class Runtime:
             self.write_heartbeat()
 
     def shutdown(self) -> None:
-        """Stop every child, release the lock, close the control API."""
+        """Close the control API to mutations, then stop every child and release ownership."""
+        self._stop.set()
+        # Wait for any admitted mutation to leave before tearing down the supervisor.
+        # Release the state lock before waiting on children so pending requests can return 409.
+        with self._state_lock:
+            if self._server is not None:
+                self._server.should_exit = True
         self.supervisor.shutdown()
-        if self._server is not None:
-            self._server.should_exit = True
         if self._server_thread is not None:
             self._server_thread.join(timeout=10)
 

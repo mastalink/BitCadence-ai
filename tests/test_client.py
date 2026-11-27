@@ -118,6 +118,25 @@ def test_send_drops_mail_to_target():
     assert body["input_payload"]["prompt"] == "Please review the diff"
 
 
+def test_send_and_lookup_explicit_job_id():
+    job_id = "7c5b5858-64be-4a34-8f21-3e6ab2135df8"
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        if request.method == "POST":
+            return httpx.Response(200, json={"success": True, "job": {"id": job_id}})
+        if request.url.path == f"/api/jobs/{job_id}":
+            return httpx.Response(200, json={"id": job_id})
+        return httpx.Response(404)
+
+    client = GatewayClient(base_url=BASE, transport=httpx.MockTransport(handle))
+    client.send("reviewer", "Review", "Review the PR", job_id=job_id)
+    assert json.loads(requests[0].content)["id"] == job_id
+    assert client.get_job(job_id) == {"id": job_id}
+    assert client.get_job("missing") is None
+
+
 def test_agents_lists():
     rec = Recorder()
     agents = _client(rec).agents()

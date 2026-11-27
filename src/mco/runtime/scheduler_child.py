@@ -14,15 +14,16 @@ from mco.killswitch import stop_active
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--gateway-url")
     parser.add_argument("--interval", type=float, default=30.0)
     arguments = parser.parse_args(argv)
 
     from mco import launcher
     from mco.cli import _gateway_client
-    from mco.logging_setup import configure_logging
 
-    configure_logging()
-    launcher.run_forever(_gateway_client(), interval=arguments.interval, hold=stop_active)
+    # Loguru's stderr sink is captured by the runtime alongside the other child output.
+    client = _gateway_client(gateway_url=arguments.gateway_url)
+    launcher.run_forever(client, interval=arguments.interval, hold=stop_active)
     return 0
 
 

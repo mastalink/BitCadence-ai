@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import os
+from threading import Event
 from typing import Any, Mapping
 
 from mco import quiet
@@ -60,7 +61,10 @@ def default_services(
             (python, "-m", "mco.cli", "serve", "--host", "127.0.0.1", "--port", str(gateway_port)),
         ))
     if scheduler:
-        services.append(ServiceProcess("scheduler", (python, "-m", "mco.runtime.scheduler_child")))
+        argv = (python, "-m", "mco.runtime.scheduler_child")
+        if gateway and gateway_port != 18789:
+            argv += ("--gateway-url", f"http://127.0.0.1:{gateway_port}")
+        services.append(ServiceProcess("scheduler", argv))
     return services
 
 
@@ -83,11 +87,14 @@ def windowless_interpreter(argv: list[str]) -> list[str]:
 
 
 class RuntimeSupervisor(Supervisor):
-    def __init__(self, adapter: Any, *, services: list[ServiceProcess] | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self, adapter: Any, *, stopping: Event, services: list[ServiceProcess] | None = None, **kwargs: Any
+    ) -> None:
         kwargs.setdefault("env_factory", child_environment)
         super().__init__(adapter, **kwargs)
         self.services: Mapping[str, ServiceProcess] = {item.key: item for item in services or []}
         self.held = False
+        self._stopping = stopping
 
     def reconcile(self, configs: dict[str, WorkerConfig]) -> None:
         """Every path into the supervisor goes through here, so services cannot be reconciled away."""
@@ -112,7 +119,7 @@ class RuntimeSupervisor(Supervisor):
         return windowless_interpreter(Supervisor._argv(config))
 
     def _spawn(self, runtime: Any) -> None:
-        if self.held:
+        if self.held or self._stopping.is_set():
             return
         super()._spawn(runtime)
 
