@@ -172,3 +172,18 @@ def test_a_supervised_scheduler_with_no_config_is_idle(tmp_path, caplog):
         interval=0, max_ticks=2, hold=lambda: False,
     )
     assert "scheduler tick failed" not in caplog.text
+
+
+def test_the_scheduler_child_holds_every_fire_while_stop_is_set(monkeypatch, stop_file):
+    from mco import cli, logging_setup
+    from mco.runtime import scheduler_child
+
+    seen = {}
+    monkeypatch.setattr(cli, "_gateway_client", lambda: "client")
+    monkeypatch.setattr(logging_setup, "configure_logging", lambda: None)
+    monkeypatch.setattr(launcher, "run_forever", lambda client, **options: seen.update(options, client=client))
+    assert scheduler_child.main(["--interval", "5"]) == 0
+    assert seen["client"] == "client" and seen["interval"] == 5
+    assert seen["hold"]() is False
+    stop_file.write_text("{}", encoding="utf-8")
+    assert seen["hold"]() is True
