@@ -184,4 +184,8 @@ class RuntimeConfig:
         self.supervisor.reconcile(workers)
         self._running = _digest(content)
         self.last_error = None
-        self.store.save(content)
+        try:
+            self.store.save(content)
+        except OSError as exc:
+            # The configuration is running; only its copy for later could not be kept.
+            self.last_error = f"running, but could not retain this generation: {exc}"

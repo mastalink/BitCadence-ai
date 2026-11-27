@@ -5264,6 +5264,439 @@
       "ignore_unknown_options": false
     },
     {
+      "path": "mco runtime",
+      "aliases": [
+        "bitcadence runtime"
+      ],
+      "anchor": "cli-mco-runtime",
+      "group": true,
+      "hidden": false,
+      "help": "The background runtime that owns the gateway, the scheduler and the workers.",
+      "source": null,
+      "line": null,
+      "inherited_groups": [
+        "mco"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco runtime maintenance",
+      "aliases": [
+        "bitcadence runtime maintenance"
+      ],
+      "anchor": "cli-mco-runtime-maintenance",
+      "group": false,
+      "hidden": false,
+      "help": "Maintenance mode: the runtime stays up, its children are stopped and schedules are held.",
+      "source": "src/mco/runtime/cli.py",
+      "line": 111,
+      "inherited_groups": [
+        "mco",
+        "mco runtime"
+      ],
+      "parameters": [
+        {
+          "name": "action",
+          "kind": "argument",
+          "tokens": [
+            "action"
+          ],
+          "type": "TEXT",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "on or off",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-maintenance-param-action"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-maintenance-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco runtime rollback",
+      "aliases": [
+        "bitcadence runtime rollback"
+      ],
+      "anchor": "cli-mco-runtime-rollback",
+      "group": false,
+      "hidden": false,
+      "help": "Restore the previous last-known-good fleet configuration.",
+      "source": "src/mco/runtime/cli.py",
+      "line": 136,
+      "inherited_groups": [
+        "mco",
+        "mco runtime"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-rollback-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco runtime run",
+      "aliases": [
+        "bitcadence runtime run"
+      ],
+      "anchor": "cli-mco-runtime-run",
+      "group": false,
+      "hidden": false,
+      "help": "Run the runtime in the foreground. Exit 0 only after a deliberate stop; non-zero means it crashed.",
+      "source": "src/mco/runtime/cli.py",
+      "line": 51,
+      "inherited_groups": [
+        "mco",
+        "mco runtime"
+      ],
+      "parameters": [
+        {
+          "name": "gateway",
+          "kind": "option",
+          "tokens": [
+            "--gateway",
+            "--no-gateway"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": true,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Run the gateway as a child of the runtime.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-run-param-gateway"
+        },
+        {
+          "name": "scheduler",
+          "kind": "option",
+          "tokens": [
+            "--scheduler",
+            "--no-scheduler"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": true,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Run the scheduler as a child of the runtime.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-run-param-scheduler"
+        },
+        {
+          "name": "gateway_port",
+          "kind": "option",
+          "tokens": [
+            "--gateway-port"
+          ],
+          "type": "INTEGER",
+          "required": false,
+          "default": 18789,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Loopback port for the supervised gateway.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-run-param-gateway-port"
+        },
+        {
+          "name": "control_port",
+          "kind": "option",
+          "tokens": [
+            "--control-port"
+          ],
+          "type": "INTEGER",
+          "required": false,
+          "default": 0,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Loopback port for the control API (0: this user's default).",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-run-param-control-port"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-run-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco runtime status",
+      "aliases": [
+        "bitcadence runtime status"
+      ],
+      "anchor": "cli-mco-runtime-status",
+      "group": false,
+      "hidden": false,
+      "help": "Show the runtime's state. Exit 1 when it should be running and is not (crashed, dead or silent).",
+      "source": "src/mco/runtime/cli.py",
+      "line": 93,
+      "inherited_groups": [
+        "mco",
+        "mco runtime"
+      ],
+      "parameters": [
+        {
+          "name": "as_json",
+          "kind": "option",
+          "tokens": [
+            "--json"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": false,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Print the heartbeat as JSON.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-status-param-as-json"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-status-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco runtime stop",
+      "aliases": [
+        "bitcadence runtime stop"
+      ],
+      "anchor": "cli-mco-runtime-stop",
+      "group": false,
+      "hidden": false,
+      "help": "Stop the runtime and its children deliberately (it exits 0 and is not restarted).",
+      "source": "src/mco/runtime/cli.py",
+      "line": 69,
+      "inherited_groups": [
+        "mco",
+        "mco runtime"
+      ],
+      "parameters": [
+        {
+          "name": "timeout",
+          "kind": "option",
+          "tokens": [
+            "--timeout"
+          ],
+          "type": "FLOAT",
+          "required": false,
+          "default": 60.0,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Seconds to wait for it to finish stopping.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-stop-param-timeout"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-stop-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
       "path": "mco schedule",
       "aliases": [
         "bitcadence schedule"
@@ -7184,7 +7617,7 @@
           "nargs": 1,
           "is_flag": true,
           "hidden": false,
-          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start \u2014 a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
+          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start — a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
           "prompt": null,
           "envvar": null,
           "choices": null,
@@ -7512,7 +7945,7 @@
           "nargs": 1,
           "is_flag": true,
           "hidden": false,
-          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start \u2014 a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
+          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start — a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
           "prompt": null,
           "envvar": null,
           "choices": null,

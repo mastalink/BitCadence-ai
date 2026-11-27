@@ -72,6 +72,12 @@ This reference covers every registered command and group recursively, every posi
 - [mco retry](#cli-mco-retry) — Re-queue a failed or rejected job back to pending (approver-role token).
 - [mco review](#cli-mco-review) — Send work to independent reviewers from different model families.
   - [mco review fanout](#cli-mco-review-fanout) — Post one review job per model family (Codex/GPT, Gemini/Antigravity, ...), skipping the builder's.
+- [mco runtime](#cli-mco-runtime) — The background runtime that owns the gateway, the scheduler and the workers.
+  - [mco runtime maintenance](#cli-mco-runtime-maintenance) — Maintenance mode: the runtime stays up, its children are stopped and schedules are held.
+  - [mco runtime rollback](#cli-mco-runtime-rollback) — Restore the previous last-known-good fleet configuration.
+  - [mco runtime run](#cli-mco-runtime-run) — Run the runtime in the foreground. Exit 0 only after a deliberate stop; non-zero means it crashed.
+  - [mco runtime status](#cli-mco-runtime-status) — Show the runtime's state. Exit 1 when it should be running and is not (crashed, dead or silent).
+  - [mco runtime stop](#cli-mco-runtime-stop) — Stop the runtime and its children deliberately (it exits 0 and is not restarted).
 - [mco schedule](#cli-mco-schedule) — Schedules and loops: what work gets created, and when.
   - [mco schedule add](#cli-mco-schedule-add) — Add a schedule by asking what, how often and what time.
   - [mco schedule disable](#cli-mco-schedule-disable) — Disable a schedule or loop, leaving its definition and history intact.
@@ -1205,6 +1211,115 @@ Implementation: [src/mco/cli.py:1844](../../src/mco/cli.py#L1844). Global/group 
 | <a id="cli-mco-review-fanout-param-priority"></a>`--priority` | INTEGER; optional | `0` |  |
 | <a id="cli-mco-review-fanout-param-dry-run"></a>`--dry-run` | BOOLEAN; flag; optional | `false` | Show who would be asked; post nothing. |
 | <a id="cli-mco-review-fanout-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-runtime"></a>
+## `mco runtime`
+
+The background runtime that owns the gateway, the scheduler and the workers.
+
+Usage example: `bitcadence runtime --help`
+
+**Expected result:** Lists the runtime lifecycle commands.
+
+**If it fails / before changing state:** Help only; nothing starts. The runtime is not registered with the operating system by these commands.
+
+Implementation: [None:None](../../None#LNone). Global/group options: [mco](#cli-mco).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-runtime-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-runtime-maintenance"></a>
+## `mco runtime maintenance`
+
+Maintenance mode: the runtime stays up, its children are stopped and schedules are held.
+
+Usage example: `bitcadence runtime maintenance on`
+
+**Expected result:** Stops the runtime's children and holds spawns and schedules until `off`. The runtime stays up. If it is not running, the choice applies at the next start.
+
+**If it fails / before changing state:** `on` stops work in progress, including the gateway. Check the job board first. The mode survives a restart.
+
+Implementation: [src/mco/runtime/cli.py:111](../../src/mco/runtime/cli.py#L111). Global/group options: [mco](#cli-mco), [mco runtime](#cli-mco-runtime).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-runtime-maintenance-param-action"></a>`ACTION` (positional) | TEXT; required | required | on or off |
+| <a id="cli-mco-runtime-maintenance-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-runtime-rollback"></a>
+## `mco runtime rollback`
+
+Restore the previous last-known-good fleet configuration.
+
+Usage example: `bitcadence runtime rollback`
+
+**Expected result:** Writes the previous last-known-good generation to ~/.mco/fleet.toml and keeps the replaced file as fleet.toml.rolled-back.
+
+**If it fails / before changing state:** Workers whose settings differ are restarted. With no earlier generation it changes nothing and exits 1. While STOP is set the file is restored and applied after STOP is cleared.
+
+Implementation: [src/mco/runtime/cli.py:136](../../src/mco/runtime/cli.py#L136). Global/group options: [mco](#cli-mco), [mco runtime](#cli-mco-runtime).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-runtime-rollback-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-runtime-run"></a>
+## `mco runtime run`
+
+Run the runtime in the foreground. Exit 0 only after a deliberate stop; non-zero means it crashed.
+
+Usage example: `bitcadence runtime run`
+
+**Expected result:** Runs the runtime in the foreground: gateway, scheduler and fleet workers as supervised children, a heartbeat file, and a loopback control API. Exits 0 after a deliberate stop, 1 after a crash, 3 if a supervisor already runs for this user.
+
+**If it fails / before changing state:** Do not start it beside the same gateway, scheduler or workers installed as services; stop and disable those first.
+
+Implementation: [src/mco/runtime/cli.py:51](../../src/mco/runtime/cli.py#L51). Global/group options: [mco](#cli-mco), [mco runtime](#cli-mco-runtime).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-runtime-run-param-gateway"></a>`--gateway`, `--no-gateway` | BOOLEAN; flag; optional | enabled | Run the gateway as a child of the runtime. |
+| <a id="cli-mco-runtime-run-param-scheduler"></a>`--scheduler`, `--no-scheduler` | BOOLEAN; flag; optional | enabled | Run the scheduler as a child of the runtime. |
+| <a id="cli-mco-runtime-run-param-gateway-port"></a>`--gateway-port` | INTEGER; optional | `18789` | Loopback port for the supervised gateway. |
+| <a id="cli-mco-runtime-run-param-control-port"></a>`--control-port` | INTEGER; optional | `0` | Loopback port for the control API (0: this user's default). |
+| <a id="cli-mco-runtime-run-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-runtime-status"></a>
+## `mco runtime status`
+
+Show the runtime's state. Exit 1 when it should be running and is not (crashed, dead or silent).
+
+Usage example: `bitcadence runtime status`
+
+**Expected result:** Shows the observed state, children and any configuration error.
+
+**If it fails / before changing state:** Read-only. Exits 1 when the runtime crashed, vanished or stopped writing its heartbeat.
+
+Implementation: [src/mco/runtime/cli.py:93](../../src/mco/runtime/cli.py#L93). Global/group options: [mco](#cli-mco), [mco runtime](#cli-mco-runtime).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-runtime-status-param-as-json"></a>`--json` | BOOLEAN; flag; optional | not set | Print the heartbeat as JSON. |
+| <a id="cli-mco-runtime-status-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-runtime-stop"></a>
+## `mco runtime stop`
+
+Stop the runtime and its children deliberately (it exits 0 and is not restarted).
+
+Usage example: `bitcadence runtime stop`
+
+**Expected result:** Asks the runtime to stop its children and exit 0, then waits for it.
+
+**If it fails / before changing state:** Stops work in progress, including the gateway. If it is not running, nothing changes.
+
+Implementation: [src/mco/runtime/cli.py:69](../../src/mco/runtime/cli.py#L69). Global/group options: [mco](#cli-mco), [mco runtime](#cli-mco-runtime).
+
+| Argument / option | Type and requirement | Default | Meaning / constraints |
+|---|---|---|---|
+| <a id="cli-mco-runtime-stop-param-timeout"></a>`--timeout` | FLOAT; optional | `60.0` | Seconds to wait for it to finish stopping. |
+| <a id="cli-mco-runtime-stop-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
 
 <a id="cli-mco-schedule"></a>
 ## `mco schedule`

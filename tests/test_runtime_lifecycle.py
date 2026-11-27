@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import socket
 
 import pytest
 
@@ -238,3 +239,14 @@ def test_maintenance_survives_a_restart(home):
     second.set_maintenance(False)
     assert second.adapter.alive() == ALL
     second.shutdown()
+
+
+def test_a_busy_control_port_is_a_crash_and_spawns_nothing(home):
+    with socket.socket() as taken:
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        runtime = make_runtime(home, serve_control=True, control_port=taken.getsockname()[1])
+        assert runtime.run(handle_signals=False) == EXIT_CRASH
+    assert runtime.adapter.spawns == []
+    assert runtime.adapter.released == 1
+    assert observed_state(read_heartbeat(runtime.paths)) == "crashed"

@@ -98,6 +98,15 @@
 <li><a href="#cli-mco-review-fanout">mco review fanout</a> — Post one review job per model family (Codex/GPT, Gemini/Antigravity, ...), skipping the builder's.</li>
 </ul>
 </li>
+<li><a href="#cli-mco-runtime">mco runtime</a> — The background runtime that owns the gateway, the scheduler and the workers.
+<ul>
+<li><a href="#cli-mco-runtime-maintenance">mco runtime maintenance</a> — Maintenance mode: the runtime stays up, its children are stopped and schedules are held.</li>
+<li><a href="#cli-mco-runtime-rollback">mco runtime rollback</a> — Restore the previous last-known-good fleet configuration.</li>
+<li><a href="#cli-mco-runtime-run">mco runtime run</a> — Run the runtime in the foreground. Exit 0 only after a deliberate stop; non-zero means it crashed.</li>
+<li><a href="#cli-mco-runtime-status">mco runtime status</a> — Show the runtime's state. Exit 1 when it should be running and is not (crashed, dead or silent).</li>
+<li><a href="#cli-mco-runtime-stop">mco runtime stop</a> — Stop the runtime and its children deliberately (it exits 0 and is not restarted).</li>
+</ul>
+</li>
 <li><a href="#cli-mco-schedule">mco schedule</a> — Schedules and loops: what work gets created, and when.
 <ul>
 <li><a href="#cli-mco-schedule-add">mco schedule add</a> — Add a schedule by asking what, how often and what time.</li>
@@ -2279,6 +2288,198 @@
 </tr>
 </tbody>
 </table>
+<p><a id="cli-mco-runtime"></a></p>
+<h2 id="mco-runtime"><code>mco runtime</code></h2>
+<p>The background runtime that owns the gateway, the scheduler and the workers.</p>
+<p>Usage example: <code>bitcadence runtime --help</code></p>
+<p><strong>Expected result:</strong> Lists the runtime lifecycle commands.</p>
+<p><strong>If it fails / before changing state:</strong> Help only; nothing starts. The runtime is not registered with the operating system by these commands.</p>
+<p>Implementation: <a href="https://github.com/mastalink/bitcadence-ai/blob/main/None#LNone">None:None</a>. Global/group options: <a href="#cli-mco">mco</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Argument / option</th>
+<th>Type and requirement</th>
+<th>Default</th>
+<th>Meaning / constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a id="cli-mco-runtime-param-help"></a><code>--help</code></td>
+<td>BOOLEAN; flag; optional</td>
+<td>not set</td>
+<td>Show this message and exit.</td>
+</tr>
+</tbody>
+</table>
+<p><a id="cli-mco-runtime-maintenance"></a></p>
+<h2 id="mco-runtime-maintenance"><code>mco runtime maintenance</code></h2>
+<p>Maintenance mode: the runtime stays up, its children are stopped and schedules are held.</p>
+<p>Usage example: <code>bitcadence runtime maintenance on</code></p>
+<p><strong>Expected result:</strong> Stops the runtime's children and holds spawns and schedules until <code>off</code>. The runtime stays up. If it is not running, the choice applies at the next start.</p>
+<p><strong>If it fails / before changing state:</strong> <code>on</code> stops work in progress, including the gateway. Check the job board first. The mode survives a restart.</p>
+<p>Implementation: <a href="https://github.com/mastalink/bitcadence-ai/blob/main/src/mco/runtime/cli.py#L111">src/mco/runtime/cli.py:111</a>. Global/group options: <a href="#cli-mco">mco</a>, <a href="#cli-mco-runtime">mco runtime</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Argument / option</th>
+<th>Type and requirement</th>
+<th>Default</th>
+<th>Meaning / constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a id="cli-mco-runtime-maintenance-param-action"></a><code>ACTION</code> (positional)</td>
+<td>TEXT; required</td>
+<td>required</td>
+<td>on or off</td>
+</tr>
+<tr>
+<td><a id="cli-mco-runtime-maintenance-param-help"></a><code>--help</code></td>
+<td>BOOLEAN; flag; optional</td>
+<td>not set</td>
+<td>Show this message and exit.</td>
+</tr>
+</tbody>
+</table>
+<p><a id="cli-mco-runtime-rollback"></a></p>
+<h2 id="mco-runtime-rollback"><code>mco runtime rollback</code></h2>
+<p>Restore the previous last-known-good fleet configuration.</p>
+<p>Usage example: <code>bitcadence runtime rollback</code></p>
+<p><strong>Expected result:</strong> Writes the previous last-known-good generation to ~/.mco/fleet.toml and keeps the replaced file as fleet.toml.rolled-back.</p>
+<p><strong>If it fails / before changing state:</strong> Workers whose settings differ are restarted. With no earlier generation it changes nothing and exits 1. While STOP is set the file is restored and applied after STOP is cleared.</p>
+<p>Implementation: <a href="https://github.com/mastalink/bitcadence-ai/blob/main/src/mco/runtime/cli.py#L136">src/mco/runtime/cli.py:136</a>. Global/group options: <a href="#cli-mco">mco</a>, <a href="#cli-mco-runtime">mco runtime</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Argument / option</th>
+<th>Type and requirement</th>
+<th>Default</th>
+<th>Meaning / constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a id="cli-mco-runtime-rollback-param-help"></a><code>--help</code></td>
+<td>BOOLEAN; flag; optional</td>
+<td>not set</td>
+<td>Show this message and exit.</td>
+</tr>
+</tbody>
+</table>
+<p><a id="cli-mco-runtime-run"></a></p>
+<h2 id="mco-runtime-run"><code>mco runtime run</code></h2>
+<p>Run the runtime in the foreground. Exit 0 only after a deliberate stop; non-zero means it crashed.</p>
+<p>Usage example: <code>bitcadence runtime run</code></p>
+<p><strong>Expected result:</strong> Runs the runtime in the foreground: gateway, scheduler and fleet workers as supervised children, a heartbeat file, and a loopback control API. Exits 0 after a deliberate stop, 1 after a crash, 3 if a supervisor already runs for this user.</p>
+<p><strong>If it fails / before changing state:</strong> Do not start it beside the same gateway, scheduler or workers installed as services; stop and disable those first.</p>
+<p>Implementation: <a href="https://github.com/mastalink/bitcadence-ai/blob/main/src/mco/runtime/cli.py#L51">src/mco/runtime/cli.py:51</a>. Global/group options: <a href="#cli-mco">mco</a>, <a href="#cli-mco-runtime">mco runtime</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Argument / option</th>
+<th>Type and requirement</th>
+<th>Default</th>
+<th>Meaning / constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a id="cli-mco-runtime-run-param-gateway"></a><code>--gateway</code>, <code>--no-gateway</code></td>
+<td>BOOLEAN; flag; optional</td>
+<td>enabled</td>
+<td>Run the gateway as a child of the runtime.</td>
+</tr>
+<tr>
+<td><a id="cli-mco-runtime-run-param-scheduler"></a><code>--scheduler</code>, <code>--no-scheduler</code></td>
+<td>BOOLEAN; flag; optional</td>
+<td>enabled</td>
+<td>Run the scheduler as a child of the runtime.</td>
+</tr>
+<tr>
+<td><a id="cli-mco-runtime-run-param-gateway-port"></a><code>--gateway-port</code></td>
+<td>INTEGER; optional</td>
+<td><code>18789</code></td>
+<td>Loopback port for the supervised gateway.</td>
+</tr>
+<tr>
+<td><a id="cli-mco-runtime-run-param-control-port"></a><code>--control-port</code></td>
+<td>INTEGER; optional</td>
+<td><code>0</code></td>
+<td>Loopback port for the control API (0: this user's default).</td>
+</tr>
+<tr>
+<td><a id="cli-mco-runtime-run-param-help"></a><code>--help</code></td>
+<td>BOOLEAN; flag; optional</td>
+<td>not set</td>
+<td>Show this message and exit.</td>
+</tr>
+</tbody>
+</table>
+<p><a id="cli-mco-runtime-status"></a></p>
+<h2 id="mco-runtime-status"><code>mco runtime status</code></h2>
+<p>Show the runtime's state. Exit 1 when it should be running and is not (crashed, dead or silent).</p>
+<p>Usage example: <code>bitcadence runtime status</code></p>
+<p><strong>Expected result:</strong> Shows the observed state, children and any configuration error.</p>
+<p><strong>If it fails / before changing state:</strong> Read-only. Exits 1 when the runtime crashed, vanished or stopped writing its heartbeat.</p>
+<p>Implementation: <a href="https://github.com/mastalink/bitcadence-ai/blob/main/src/mco/runtime/cli.py#L93">src/mco/runtime/cli.py:93</a>. Global/group options: <a href="#cli-mco">mco</a>, <a href="#cli-mco-runtime">mco runtime</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Argument / option</th>
+<th>Type and requirement</th>
+<th>Default</th>
+<th>Meaning / constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a id="cli-mco-runtime-status-param-as-json"></a><code>--json</code></td>
+<td>BOOLEAN; flag; optional</td>
+<td>not set</td>
+<td>Print the heartbeat as JSON.</td>
+</tr>
+<tr>
+<td><a id="cli-mco-runtime-status-param-help"></a><code>--help</code></td>
+<td>BOOLEAN; flag; optional</td>
+<td>not set</td>
+<td>Show this message and exit.</td>
+</tr>
+</tbody>
+</table>
+<p><a id="cli-mco-runtime-stop"></a></p>
+<h2 id="mco-runtime-stop"><code>mco runtime stop</code></h2>
+<p>Stop the runtime and its children deliberately (it exits 0 and is not restarted).</p>
+<p>Usage example: <code>bitcadence runtime stop</code></p>
+<p><strong>Expected result:</strong> Asks the runtime to stop its children and exit 0, then waits for it.</p>
+<p><strong>If it fails / before changing state:</strong> Stops work in progress, including the gateway. If it is not running, nothing changes.</p>
+<p>Implementation: <a href="https://github.com/mastalink/bitcadence-ai/blob/main/src/mco/runtime/cli.py#L69">src/mco/runtime/cli.py:69</a>. Global/group options: <a href="#cli-mco">mco</a>, <a href="#cli-mco-runtime">mco runtime</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Argument / option</th>
+<th>Type and requirement</th>
+<th>Default</th>
+<th>Meaning / constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a id="cli-mco-runtime-stop-param-timeout"></a><code>--timeout</code></td>
+<td>FLOAT; optional</td>
+<td><code>60.0</code></td>
+<td>Seconds to wait for it to finish stopping.</td>
+</tr>
+<tr>
+<td><a id="cli-mco-runtime-stop-param-help"></a><code>--help</code></td>
+<td>BOOLEAN; flag; optional</td>
+<td>not set</td>
+<td>Show this message and exit.</td>
+</tr>
+</tbody>
+</table>
 <p><a id="cli-mco-schedule"></a></p>
 <h2 id="mco-schedule"><code>mco schedule</code></h2>
 <p>Schedules and loops: what work gets created, and when.</p>
@@ -4088,5 +4289,5 @@ python docs/wiki/_review/verify_cli_examples.py
 </code></pre>
 <p>The coverage verifier imports the live Typer tree, <strong>never invokes command or parameter callbacks</strong>, compares documented metadata and checks every command/parameter anchor and option spelling. New/changed/removed commands or parameters fail coverage. Its <code>--dump</code> flag prints live metadata for a reviewer; it does not silently rewrite the reviewed reference. Example verification separately dry-parses command examples. Neither check establishes live gateway, browser, authorization, worker or external-platform behavior.</p>
 <p>Source boundary: this page documents the command tree at repository commit <code>0f9f36e</code> (2026-11-13). Runtime values, configured connectors/launchers and organization policy remain installation-specific. Options without help text were explained from their implementation; no undeclared command or future design was promoted into a shipped capability.</p>
-</article><footer><a href="index.html">Help home</a><span>Instructions checked against source · November 2026</span><a href="#content">Back to top ↑</a></footer></main><aside aria-label="On this page"><b>On this page</b><a href="#read-this-first">Read this first</a><a href="#find-a-command">Find a command</a><a href="#shared-recovery">Shared recovery</a><a href="#mco">`mco`</a><a href="#mco-advanced">`mco advanced`</a><a href="#mco-agents">`mco agents`</a><a href="#mco-approve">`mco approve`</a><a href="#mco-archive">`mco archive`</a><a href="#mco-ask">`mco ask`</a><a href="#mco-audit">`mco audit`</a><a href="#mco-audit-checkpoint">`mco audit-checkpoint`</a><a href="#mco-cancel">`mco cancel`</a><a href="#mco-cio">`mco cio`</a><a href="#mco-cio-check">`mco cio check`</a><a href="#mco-cockpit">`mco cockpit`</a><a href="#mco-cockpit-attach">`mco cockpit attach`</a><a href="#mco-cockpit-read">`mco cockpit read`</a><a href="#mco-cockpit-run">`mco cockpit run`</a><a href="#mco-cockpit-status">`mco cockpit status`</a><a href="#mco-cockpit-up">`mco cockpit up`</a><a href="#mco-connect">`mco connect`</a><a href="#mco-connectors">`mco connectors`</a><a href="#mco-deregister">`mco deregister`</a><a href="#mco-doctor">`mco doctor`</a><a href="#mco-duplicates">`mco duplicates`</a><a href="#mco-edition">`mco edition`</a><a href="#mco-exchange">`mco exchange`</a><a href="#mco-exchange-list">`mco exchange list`</a><a href="#mco-exchange-post">`mco exchange post`</a><a href="#mco-exchange-promote">`mco exchange promote`</a><a href="#mco-fix">`mco fix`</a><a href="#mco-fleet">`mco fleet`</a><a href="#mco-fleet-apply">`mco fleet apply`</a><a href="#mco-fleet-set">`mco fleet set`</a><a href="#mco-fleet-status">`mco fleet status`</a><a href="#mco-gui">`mco gui`</a><a href="#mco-helpers">`mco helpers`</a><a href="#mco-helpers-add">`mco helpers add`</a><a href="#mco-helpers-fix">`mco helpers fix`</a><a href="#mco-jev">`mco jev`</a><a href="#mco-jev-route-model">`mco jev route-model`</a><a href="#mco-jobs">`mco jobs`</a><a href="#mco-jobs-rank">`mco jobs rank`</a><a href="#mco-launch">`mco launch`</a><a href="#mco-listen">`mco listen`</a><a href="#mco-mcp">`mco mcp`</a><a href="#mco-orgs">`mco orgs`</a><a href="#mco-pause">`mco pause`</a><a href="#mco-platform">`mco platform`</a><a href="#mco-reassign">`mco reassign`</a><a href="#mco-recall">`mco recall`</a><a href="#mco-register">`mco register`</a><a href="#mco-reject">`mco reject`</a><a href="#mco-remember">`mco remember`</a><a href="#mco-reset-token">`mco reset-token`</a><a href="#mco-restart">`mco restart`</a><a href="#mco-restore-fence">`mco restore-fence`</a><a href="#mco-resume">`mco resume`</a><a href="#mco-retry">`mco retry`</a><a href="#mco-review">`mco review`</a><a href="#mco-review-fanout">`mco review fanout`</a><a href="#mco-schedule">`mco schedule`</a><a href="#mco-schedule-add">`mco schedule add`</a><a href="#mco-schedule-disable">`mco schedule disable`</a><a href="#mco-schedule-enable">`mco schedule enable`</a><a href="#mco-schedule-init">`mco schedule init`</a><a href="#mco-schedule-list">`mco schedule list`</a><a href="#mco-schedule-off">`mco schedule off`</a><a href="#mco-schedule-on">`mco schedule on`</a><a href="#mco-schedule-reset">`mco schedule reset`</a><a href="#mco-schedule-run">`mco schedule run`</a><a href="#mco-schedule-tick">`mco schedule tick`</a><a href="#mco-score">`mco score`</a><a href="#mco-score-deliver">`mco score deliver`</a><a href="#mco-score-grant-local">`mco score grant-local`</a><a href="#mco-score-grant-standing-local">`mco score grant-standing-local`</a><a href="#mco-score-intake">`mco score intake`</a><a href="#mco-score-list">`mco score list`</a><a href="#mco-score-revoke-standing-local">`mco score revoke-standing-local`</a><a href="#mco-score-scaffold">`mco score scaffold`</a><a href="#mco-score-start">`mco score start`</a><a href="#mco-score-status">`mco score status`</a><a href="#mco-score-tick">`mco score tick`</a><a href="#mco-send">`mco send`</a><a href="#mco-serve">`mco serve`</a><a href="#mco-service">`mco service`</a><a href="#mco-service-install">`mco service install`</a><a href="#mco-service-install-scheduler">`mco service install-scheduler`</a><a href="#mco-service-install-waker">`mco service install-waker`</a><a href="#mco-service-logs">`mco service logs`</a><a href="#mco-service-restart">`mco service restart`</a><a href="#mco-service-status">`mco service status`</a><a href="#mco-service-uninstall">`mco service uninstall`</a><a href="#mco-settings">`mco settings`</a><a href="#mco-setup">`mco setup`</a><a href="#mco-start">`mco start`</a><a href="#mco-status">`mco status`</a><a href="#mco-stop">`mco stop`</a><a href="#mco-sync">`mco sync`</a><a href="#mco-tail">`mco tail`</a><a href="#mco-tray">`mco tray`</a><a href="#mco-unarchive">`mco unarchive`</a><a href="#mco-upgrade">`mco upgrade`</a><a href="#mco-wake">`mco wake`</a><a href="#mco-watch">`mco watch`</a><a href="#mco-workflow">`mco workflow`</a><a href="#keep-this-reference-current">Keep this reference current</a></aside></div>
+</article><footer><a href="index.html">Help home</a><span>Instructions checked against source · November 2026</span><a href="#content">Back to top ↑</a></footer></main><aside aria-label="On this page"><b>On this page</b><a href="#read-this-first">Read this first</a><a href="#find-a-command">Find a command</a><a href="#shared-recovery">Shared recovery</a><a href="#mco">`mco`</a><a href="#mco-advanced">`mco advanced`</a><a href="#mco-agents">`mco agents`</a><a href="#mco-approve">`mco approve`</a><a href="#mco-archive">`mco archive`</a><a href="#mco-ask">`mco ask`</a><a href="#mco-audit">`mco audit`</a><a href="#mco-audit-checkpoint">`mco audit-checkpoint`</a><a href="#mco-cancel">`mco cancel`</a><a href="#mco-cio">`mco cio`</a><a href="#mco-cio-check">`mco cio check`</a><a href="#mco-cockpit">`mco cockpit`</a><a href="#mco-cockpit-attach">`mco cockpit attach`</a><a href="#mco-cockpit-read">`mco cockpit read`</a><a href="#mco-cockpit-run">`mco cockpit run`</a><a href="#mco-cockpit-status">`mco cockpit status`</a><a href="#mco-cockpit-up">`mco cockpit up`</a><a href="#mco-connect">`mco connect`</a><a href="#mco-connectors">`mco connectors`</a><a href="#mco-deregister">`mco deregister`</a><a href="#mco-doctor">`mco doctor`</a><a href="#mco-duplicates">`mco duplicates`</a><a href="#mco-edition">`mco edition`</a><a href="#mco-exchange">`mco exchange`</a><a href="#mco-exchange-list">`mco exchange list`</a><a href="#mco-exchange-post">`mco exchange post`</a><a href="#mco-exchange-promote">`mco exchange promote`</a><a href="#mco-fix">`mco fix`</a><a href="#mco-fleet">`mco fleet`</a><a href="#mco-fleet-apply">`mco fleet apply`</a><a href="#mco-fleet-set">`mco fleet set`</a><a href="#mco-fleet-status">`mco fleet status`</a><a href="#mco-gui">`mco gui`</a><a href="#mco-helpers">`mco helpers`</a><a href="#mco-helpers-add">`mco helpers add`</a><a href="#mco-helpers-fix">`mco helpers fix`</a><a href="#mco-jev">`mco jev`</a><a href="#mco-jev-route-model">`mco jev route-model`</a><a href="#mco-jobs">`mco jobs`</a><a href="#mco-jobs-rank">`mco jobs rank`</a><a href="#mco-launch">`mco launch`</a><a href="#mco-listen">`mco listen`</a><a href="#mco-mcp">`mco mcp`</a><a href="#mco-orgs">`mco orgs`</a><a href="#mco-pause">`mco pause`</a><a href="#mco-platform">`mco platform`</a><a href="#mco-reassign">`mco reassign`</a><a href="#mco-recall">`mco recall`</a><a href="#mco-register">`mco register`</a><a href="#mco-reject">`mco reject`</a><a href="#mco-remember">`mco remember`</a><a href="#mco-reset-token">`mco reset-token`</a><a href="#mco-restart">`mco restart`</a><a href="#mco-restore-fence">`mco restore-fence`</a><a href="#mco-resume">`mco resume`</a><a href="#mco-retry">`mco retry`</a><a href="#mco-review">`mco review`</a><a href="#mco-review-fanout">`mco review fanout`</a><a href="#mco-runtime">`mco runtime`</a><a href="#mco-runtime-maintenance">`mco runtime maintenance`</a><a href="#mco-runtime-rollback">`mco runtime rollback`</a><a href="#mco-runtime-run">`mco runtime run`</a><a href="#mco-runtime-status">`mco runtime status`</a><a href="#mco-runtime-stop">`mco runtime stop`</a><a href="#mco-schedule">`mco schedule`</a><a href="#mco-schedule-add">`mco schedule add`</a><a href="#mco-schedule-disable">`mco schedule disable`</a><a href="#mco-schedule-enable">`mco schedule enable`</a><a href="#mco-schedule-init">`mco schedule init`</a><a href="#mco-schedule-list">`mco schedule list`</a><a href="#mco-schedule-off">`mco schedule off`</a><a href="#mco-schedule-on">`mco schedule on`</a><a href="#mco-schedule-reset">`mco schedule reset`</a><a href="#mco-schedule-run">`mco schedule run`</a><a href="#mco-schedule-tick">`mco schedule tick`</a><a href="#mco-score">`mco score`</a><a href="#mco-score-deliver">`mco score deliver`</a><a href="#mco-score-grant-local">`mco score grant-local`</a><a href="#mco-score-grant-standing-local">`mco score grant-standing-local`</a><a href="#mco-score-intake">`mco score intake`</a><a href="#mco-score-list">`mco score list`</a><a href="#mco-score-revoke-standing-local">`mco score revoke-standing-local`</a><a href="#mco-score-scaffold">`mco score scaffold`</a><a href="#mco-score-start">`mco score start`</a><a href="#mco-score-status">`mco score status`</a><a href="#mco-score-tick">`mco score tick`</a><a href="#mco-send">`mco send`</a><a href="#mco-serve">`mco serve`</a><a href="#mco-service">`mco service`</a><a href="#mco-service-install">`mco service install`</a><a href="#mco-service-install-scheduler">`mco service install-scheduler`</a><a href="#mco-service-install-waker">`mco service install-waker`</a><a href="#mco-service-logs">`mco service logs`</a><a href="#mco-service-restart">`mco service restart`</a><a href="#mco-service-status">`mco service status`</a><a href="#mco-service-uninstall">`mco service uninstall`</a><a href="#mco-settings">`mco settings`</a><a href="#mco-setup">`mco setup`</a><a href="#mco-start">`mco start`</a><a href="#mco-status">`mco status`</a><a href="#mco-stop">`mco stop`</a><a href="#mco-sync">`mco sync`</a><a href="#mco-tail">`mco tail`</a><a href="#mco-tray">`mco tray`</a><a href="#mco-unarchive">`mco unarchive`</a><a href="#mco-upgrade">`mco upgrade`</a><a href="#mco-wake">`mco wake`</a><a href="#mco-watch">`mco watch`</a><a href="#mco-workflow">`mco workflow`</a><a href="#keep-this-reference-current">Keep this reference current</a></aside></div>
 <dialog id="search-dialog"><div class="search-bar"><input id="search" type="search" placeholder="What would you like to do?" aria-label="Search guides and commands" autocomplete="off"><button id="search-close" aria-label="Close search">Esc</button></div><div id="search-status" role="status">Type a task, command or feature.</div><div id="search-results"></div></dialog><div id="announcement" class="sr-only" role="status"></div></body></html>

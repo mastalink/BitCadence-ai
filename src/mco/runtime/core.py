@@ -12,6 +12,7 @@ start children.
 
 from __future__ import annotations
 
+import importlib
 import inspect
 import json
 import os
@@ -101,6 +102,8 @@ class Runtime:
         }
         if "lock_dir" in inspect.signature(Supervisor.__init__).parameters:
             options["lock_dir"] = self.paths.home / "locks"  # shared with any other owner of these workers
+        if "foreign_owner" in inspect.signature(Supervisor.__init__).parameters:
+            options["foreign_owner"] = self._foreign_owner  # never a second copy of a worker run by something else
         self.supervisor = RuntimeSupervisor(
             self.adapter,
             services=default_services() if services is None else services,
@@ -122,6 +125,13 @@ class Runtime:
         self._server: uvicorn.Server | None = None
         self._server_thread: threading.Thread | None = None
         self._process_created = psutil.Process().create_time()
+
+    def _foreign_owner(self, config: Any) -> int | None:
+        if config.role == "runtime":
+            return None
+        ownership = importlib.import_module("mco.agentd.ownership")
+        handles = [item.process for item in self.supervisor.workers.values() if item.process is not None]
+        return ownership.find_foreign_waker(config, own_pids=ownership.owned_pids(handles))
 
     # -- state --------------------------------------------------------------
 
