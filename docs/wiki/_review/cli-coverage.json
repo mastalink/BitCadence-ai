@@ -1080,6 +1080,437 @@
       "ignore_unknown_options": false
     },
     {
+      "path": "mco cockpit",
+      "aliases": [
+        "bitcadence cockpit"
+      ],
+      "anchor": "cli-mco-cockpit",
+      "group": true,
+      "hidden": false,
+      "help": "One herdr session for every process and job: no console windows.",
+      "source": null,
+      "line": null,
+      "inherited_groups": [
+        "mco"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco cockpit attach",
+      "aliases": [
+        "bitcadence cockpit attach"
+      ],
+      "anchor": "cli-mco-cockpit-attach",
+      "group": false,
+      "hidden": false,
+      "help": "Open the cockpit in this terminal (all workspaces, panes and agents).",
+      "source": "src/mco/cli.py",
+      "line": 1830,
+      "inherited_groups": [
+        "mco",
+        "mco cockpit"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-attach-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco cockpit read",
+      "aliases": [
+        "bitcadence cockpit read"
+      ],
+      "anchor": "cli-mco-cockpit-read",
+      "group": false,
+      "hidden": false,
+      "help": "Print the recent output of a cockpit pane.",
+      "source": "src/mco/cli.py",
+      "line": 1813,
+      "inherited_groups": [
+        "mco",
+        "mco cockpit"
+      ],
+      "parameters": [
+        {
+          "name": "label",
+          "kind": "argument",
+          "tokens": [
+            "label"
+          ],
+          "type": "TEXT",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Pane label.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-read-param-label"
+        },
+        {
+          "name": "lines",
+          "kind": "option",
+          "tokens": [
+            "--lines"
+          ],
+          "type": "INTEGER",
+          "required": false,
+          "default": 80,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "How many recent lines.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-read-param-lines"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-read-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco cockpit run",
+      "aliases": [
+        "bitcadence cockpit run"
+      ],
+      "anchor": "cli-mco-cockpit-run",
+      "group": false,
+      "hidden": false,
+      "help": "Run a one-off job in its own cockpit pane instead of a new console window.",
+      "source": "src/mco/cli.py",
+      "line": 1796,
+      "inherited_groups": [
+        "mco",
+        "mco cockpit"
+      ],
+      "parameters": [
+        {
+          "name": "label",
+          "kind": "argument",
+          "tokens": [
+            "label"
+          ],
+          "type": "TEXT",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Unique pane label for this job, e.g. render-episode-12.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-run-param-label"
+        },
+        {
+          "name": "command",
+          "kind": "argument",
+          "tokens": [
+            "command"
+          ],
+          "type": "TEXT",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": -1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "The command and its arguments (put them after --).",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-run-param-command"
+        },
+        {
+          "name": "workspace",
+          "kind": "option",
+          "tokens": [
+            "--workspace"
+          ],
+          "type": "TEXT",
+          "required": false,
+          "default": "jobs",
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Workspace to put the pane in.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-run-param-workspace"
+        },
+        {
+          "name": "cwd",
+          "kind": "option",
+          "tokens": [
+            "--cwd"
+          ],
+          "type": "TEXT",
+          "required": false,
+          "default": "",
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Working directory for the pane.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-run-param-cwd"
+        },
+        {
+          "name": "reuse",
+          "kind": "option",
+          "tokens": [
+            "--reuse"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": false,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Run in the existing pane with this label.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-run-param-reuse"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-run-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco cockpit status",
+      "aliases": [
+        "bitcadence cockpit status"
+      ],
+      "anchor": "cli-mco-cockpit-status",
+      "group": false,
+      "hidden": false,
+      "help": "Show declared panes and running one-off jobs.",
+      "source": "src/mco/cli.py",
+      "line": 1779,
+      "inherited_groups": [
+        "mco",
+        "mco cockpit"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-status-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco cockpit up",
+      "aliases": [
+        "bitcadence cockpit up"
+      ],
+      "anchor": "cli-mco-cockpit-up",
+      "group": false,
+      "hidden": false,
+      "help": "Start the cockpit and every declared pane (~/.mco/cockpit.toml + fleet workers with mode=pane).",
+      "source": "src/mco/cli.py",
+      "line": 1767,
+      "inherited_groups": [
+        "mco",
+        "mco cockpit"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-cockpit-up-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
       "path": "mco connect",
       "aliases": [
         "bitcadence connect"
@@ -4602,6 +5033,237 @@
       "ignore_unknown_options": false
     },
     {
+      "path": "mco review",
+      "aliases": [
+        "bitcadence review"
+      ],
+      "anchor": "cli-mco-review",
+      "group": true,
+      "hidden": false,
+      "help": "Send work to independent reviewers from different model families.",
+      "source": null,
+      "line": null,
+      "inherited_groups": [
+        "mco"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-review-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco review fanout",
+      "aliases": [
+        "bitcadence review fanout"
+      ],
+      "anchor": "cli-mco-review-fanout",
+      "group": false,
+      "hidden": false,
+      "help": "Post one review job per model family (Codex/GPT, Gemini/Antigravity, ...), skipping the builder's.",
+      "source": "src/mco/cli.py",
+      "line": 1844,
+      "inherited_groups": [
+        "mco",
+        "mco review"
+      ],
+      "parameters": [
+        {
+          "name": "subject",
+          "kind": "option",
+          "tokens": [
+            "--subject"
+          ],
+          "type": "TEXT",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "What is being reviewed, in a few words.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-review-fanout-param-subject"
+        },
+        {
+          "name": "rubric_file",
+          "kind": "option",
+          "tokens": [
+            "--rubric-file"
+          ],
+          "type": "TEXT",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Text file with the pass bar.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-review-fanout-param-rubric-file"
+        },
+        {
+          "name": "file",
+          "kind": "option",
+          "tokens": [
+            "--file"
+          ],
+          "type": "TEXT",
+          "required": false,
+          "default": [],
+          "multiple": true,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "A file to review (repeatable).",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-review-fanout-param-file"
+        },
+        {
+          "name": "exclude_family",
+          "kind": "option",
+          "tokens": [
+            "--exclude-family"
+          ],
+          "type": "TEXT",
+          "required": false,
+          "default": [],
+          "multiple": true,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Model family that built the work (never reviews it).",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-review-fanout-param-exclude-family"
+        },
+        {
+          "name": "priority",
+          "kind": "option",
+          "tokens": [
+            "--priority"
+          ],
+          "type": "INTEGER",
+          "required": false,
+          "default": 0,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-review-fanout-param-priority"
+        },
+        {
+          "name": "dry_run",
+          "kind": "option",
+          "tokens": [
+            "--dry-run"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": false,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show who would be asked; post nothing.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-review-fanout-param-dry-run"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-review-fanout-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
       "path": "mco schedule",
       "aliases": [
         "bitcadence schedule"
@@ -6522,7 +7184,7 @@
           "nargs": 1,
           "is_flag": true,
           "hidden": false,
-          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start — a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
+          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start \u2014 a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
           "prompt": null,
           "envvar": null,
           "choices": null,
@@ -6850,7 +7512,7 @@
           "nargs": 1,
           "is_flag": true,
           "hidden": false,
-          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start — a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
+          "help": "Enable live repository:write adapter execution. Required on every tick of a run with repository:write tasks, not just start \u2014 a human-issued grant (see POST /api/score/grants) must also authorize the run's digest/run_id before any commit actually executes.",
           "prompt": null,
           "envvar": null,
           "choices": null,

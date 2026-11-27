@@ -1,0 +1,19 @@
+# ~/.mco/cockpit.toml - everything long-running, in one herdr session (see docs/adr/0003-herdr-cockpit.md).
+# `bitcadence cockpit up` starts each pane whose label is not already running; it never starts one twice.
+# Workers belong in fleet.toml (mode = "pane" puts them in the `agents` workspace automatically).
+# All paths below are placeholders: real locations are deployment configuration and never belong in the repo.
+
+session = "bitcadence"
+# herdr = "/path/to/herdr"         # optional; else BITCADENCE_HERDR, else `herdr` on PATH
+
+[[pane]]
+workspace = "services"
+label = "pipeline-watcher"
+cwd = "~/projects/example-project"
+command = "python watcher.py --watch"
+
+[[pane]]
+workspace = "services"
+label = "review-portal"
+cwd = "~/projects/example-project"
+command = "python review_portal.py"
