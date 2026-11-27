@@ -69,6 +69,55 @@ To approve a reusable Score class once for unattended local runs, with immediate
 
 ## If It Goes Wrong
 
+### Authenticated completion blocked on "Strict JSON result required"
+
+The bridge accepts both a legacy `output_payload` containing JSON text itself
+and the canonical `output_payload.result` containing JSON text. Both must decode
+to one strict JSON object: prose, code fences, non-object results, non-finite
+numbers, duplicate keys, and malformed JSON are refused. Completion actor/role,
+lease identity, immutable job intent, independent reviewer identity, artifact
+SHA-256, and exact review evidence/verdict checks still apply. Stored jobs and
+results are never rewritten to make them pass.
+
+An existing blocked run stays blocked after upgrading. Following independent
+review of the repair, its original owner may explicitly invoke
+`Conductor.retry_validation(run_id)` (or `ScoreBridge.retry_validation(run_id,
+board)`) once. The command below invokes that same API, uses the normal CLI
+credential configuration, and requires explicit database and artifact root paths:
+
+```powershell
+# Run from the independently reviewed checkout with the ORIGINAL owner's credential.
+$env:PYTHONPATH = 'src'
+python -m mco.orchestrator.score_conductor retry-validation `
+  --run-id example-audit-run `
+  --db "$env:USERPROFILE\.mco\score-runs.db" `
+  --root "$env:USERPROFILE\.mco\score-artifacts"
+```
+
+Use the run's original database and artifact root. A successful invocation
+validates existing completions. Advance new work with the normal tick or sweep.
+
+Repository-write runs can use `tick --retry-blocked` after the underlying
+validation issue is corrected. That path revalidates the original result
+against the normal repository-write and authority checks.
+
+The one-time audit retry above requires a read-only run blocked solely by the
+exact envelope error. Preflight checks the original owner credential,
+authenticated completion events, existing completed evidence, independent
+reviewers, exact passing review bindings, and unexpired active dispatch
+deadlines. Rejected or failed jobs or reviews, other blocking causes, missing
+events, and changes to previously validated evidence block this retry. It never
+extends deadlines, issues authority, replaces results, or redispatches
+completed reviewers. **An expired deadline cannot be recovered with this
+command**, even after a connector-envelope repair.
+
+One durable `validation_retry` event records the owner, Organization, Score
+digest, original blocking event sequence IDs, completed submitted job IDs, and
+active deadlines. The retry budget is one per run and survives restarts;
+concurrent requests cannot both consume it. Ordinary ticks and sweeps never call
+the recovery API automatically. If evidence changes between preflight and polling,
+normal validation blocks again and the consumed retry cannot be repeated.
+
 ### 1. "Score validation error: Cyclic dependency"
 - **Cause:** One goal packet depends on another in a circular loop.
 - **Fix:** Run `scores validate` to see the exact cycle path reported by the validator.

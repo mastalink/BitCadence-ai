@@ -59,6 +59,45 @@ mco score grant-local examples/scores/score-human-gate-canary.score.json --run-i
 </ul>
 <hr />
 <h2 id="if-it-goes-wrong">If It Goes Wrong</h2>
+<h3 id="authenticated-completion-blocked-on-strict-json-result-required">Authenticated completion blocked on &quot;Strict JSON result required&quot;</h3>
+<p>The bridge accepts both a legacy <code>output_payload</code> containing JSON text itself
+and the canonical <code>output_payload.result</code> containing JSON text. Both must decode
+to one strict JSON object: prose, code fences, non-object results, non-finite
+numbers, duplicate keys, and malformed JSON are refused. Completion actor/role,
+lease identity, immutable job intent, independent reviewer identity, artifact
+SHA-256, and exact review evidence/verdict checks still apply. Stored jobs and
+results are never rewritten to make them pass.</p>
+<p>An existing blocked run stays blocked after upgrading. Following independent
+review of the repair, its original owner may explicitly invoke
+<code>Conductor.retry_validation(run_id)</code> (or <code>ScoreBridge.retry_validation(run_id, board)</code>) once. The command below invokes that same API, uses the normal CLI
+credential configuration, and requires explicit database and artifact root paths:</p>
+<pre><code class="language-powershell"># Run from the independently reviewed checkout with the ORIGINAL owner's credential.
+$env:PYTHONPATH = 'src'
+python -m mco.orchestrator.score_conductor retry-validation `
+  --run-id example-audit-run `
+  --db &quot;$env:USERPROFILE\.mco\score-runs.db&quot; `
+  --root &quot;$env:USERPROFILE\.mco\score-artifacts&quot;
+</code></pre>
+<p>Use the run's original database and artifact root. A successful invocation
+validates existing completions. Advance new work with the normal tick or sweep.</p>
+<p>Repository-write runs can use <code>tick --retry-blocked</code> after the underlying
+validation issue is corrected. That path revalidates the original result
+against the normal repository-write and authority checks.</p>
+<p>The one-time audit retry above requires a read-only run blocked solely by the
+exact envelope error. Preflight checks the original owner credential,
+authenticated completion events, existing completed evidence, independent
+reviewers, exact passing review bindings, and unexpired active dispatch
+deadlines. Rejected or failed jobs or reviews, other blocking causes, missing
+events, and changes to previously validated evidence block this retry. It never
+extends deadlines, issues authority, replaces results, or redispatches
+completed reviewers. <strong>An expired deadline cannot be recovered with this
+command</strong>, even after a connector-envelope repair.</p>
+<p>One durable <code>validation_retry</code> event records the owner, Organization, Score
+digest, original blocking event sequence IDs, completed submitted job IDs, and
+active deadlines. The retry budget is one per run and survives restarts;
+concurrent requests cannot both consume it. Ordinary ticks and sweeps never call
+the recovery API automatically. If evidence changes between preflight and polling,
+normal validation blocks again and the consumed retry cannot be repeated.</p>
 <h3 id="1-score-validation-error-cyclic-dependency">1. &quot;Score validation error: Cyclic dependency&quot;</h3>
 <ul>
 <li><strong>Cause:</strong> One goal packet depends on another in a circular loop.</li>

@@ -1469,7 +1469,14 @@ def score_tick(
     """Advance the run: plan what can start, dispatch it, accept finished work."""
     conductor, _ = _conductor(database, root, live_repository_write=live_repository_write)
     if retry_blocked:
-        if conductor.bridge.resume(run_id, conductor.board):
+        from mco.orchestrator.scores import ScoreError
+
+        try:
+            resumed = conductor.bridge.resume(run_id, conductor.board)
+        except ScoreError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from exc
+        if resumed:
             console.print(f"[yellow]Run {run_id} was blocked; checking it again.[/yellow]")
         else:
             console.print(f"[dim]Run {run_id} is not blocked; ticking as usual.[/dim]")
