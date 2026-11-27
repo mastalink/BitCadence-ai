@@ -369,41 +369,18 @@ def test_lineage_normalization_in_conductor_launch_requires(tmp_path):
     assert cond_st2["launched"] is True
 
 
-def test_get_jobs_reads_all_rows_without_100_row_loss(monkeypatch):
-    class FakeDBForJobs:
-        def __init__(self):
-            self.jobs = [
-                {"id": f"j-{i}", "title": f"Job {i}", "created_at": f"2026-01-01T00:{i:02d}:00Z", "org_id": "default", "archived": False}
-                for i in range(150)
-            ]
-            self._limit = None
-
-        def table(self, name):
-            return self
-
-        def select(self, *_args):
-            return self
-
-        def eq(self, col, val):
-            return self
-
-        def order(self, *_args, **_kw):
-            return self
-
-        def limit(self, n):
-            self._limit = n
-            return self
-
-        def execute(self):
-            class Res:
-                pass
-            r = Res()
-            r.data = self.jobs[:self._limit] if self._limit else list(self.jobs)
-            return r
-
+def test_get_jobs_reads_beyond_storage_page(monkeypatch, tmp_path):
+    from mco.localstore import LocalStore
     import mco.orchestrator.routes as routes_mod
-    fake_db = FakeDBForJobs()
-    monkeypatch.setattr(routes_mod, "get_db_client", lambda: fake_db)
+
+    store = LocalStore(tmp_path / "jobs.db")
+    with store.transaction():
+        for i in range(550):
+            store.table("agent_jobs").insert({
+                "id": f"j-{i}", "title": f"Job {i}", "created_at": "2026-01-01T00:00:00Z",
+                "org_id": "default", "archived": False,
+            }).execute()
+    monkeypatch.setattr(routes_mod, "get_db_client", lambda: store)
 
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -418,15 +395,16 @@ def test_get_jobs_reads_all_rows_without_100_row_loss(monkeypatch):
     }
     client = TestClient(app)
 
-    # All 150 jobs returned without truncation when limit is omitted
+    # All jobs are returned across multiple storage pages when limit is omitted.
     res = client.get("/api/jobs")
     assert res.status_code == 200
-    assert len(res.json()) == 150
+    assert len(res.json()) == 550
 
     # Limit parameter works when specified
     res_lim = client.get("/api/jobs?limit=50")
     assert res_lim.status_code == 200
     assert len(res_lim.json()) == 50
+    store.close()
 
 
 def test_get_recent_events_reads_all_jobs_without_500_limit(monkeypatch):

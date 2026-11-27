@@ -269,6 +269,48 @@ def test_no_review_verdict_escalates_without_creating_a_fix(tmp_path, outcome):
     assert h.client.posts.count(escalation["id"]) == 1
 
 
+
+def test_pass_with_findings_reaches_gate_with_the_findings_as_notes(tmp_path):
+    h = setup_harness(tmp_path)
+    start_reviews(h)
+    first, second, third = review_ids(h)
+    for review in (second, third):
+        h.client.finish(review, {"verdict": "pass", "findings": []})
+    nit = {"where": "handoff.py:1", "problem": "wording", "fix": "reword"}
+    h.client.finish(first, {"verdict": "pass", "findings": [nit]})
+    assert h.advance()["A"] == "merge approval posted"
+    assert h.job_id("A", "escalate") not in h.client.jobs
+    assert h.job_id("A", "fix-1") not in h.client.jobs
+    prompt = h.client.jobs[h.job_id("A", "merge")]["prompt"]
+    assert "Non-blocking reviewer findings" in prompt and "wording" in prompt
+
+
+def test_pass_with_non_list_findings_is_still_invalid(tmp_path):
+    h = setup_harness(tmp_path)
+    start_reviews(h)
+    first, second, third = review_ids(h)
+    for review in (second, third):
+        h.client.finish(review, {"verdict": "pass", "findings": []})
+    h.client.finish(first, {"verdict": "pass", "findings": "looks fine"})
+    assert h.advance()["A"] == "escalated"
+
+
+def test_late_review_after_escalation_moves_on_to_the_gate(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    h = setup_harness(tmp_path)
+    start_reviews(h)
+    first, second, third = review_ids(h)
+    for review in (second, third):
+        h.client.finish(review, {"verdict": "pass", "findings": []})
+    created = datetime.now(timezone.utc) - timedelta(days=2)
+    h.client.jobs[first].update(created_at=created.isoformat())
+    assert h.advance()["A"] == "escalated"
+    h.client.finish(first, {"verdict": "pass", "findings": []})
+    h.client.finish(h.job_id("A", "escalate"))
+    assert h.advance()["A"] == "merge approval posted"
+    assert h.client.jobs[h.job_id("A", "merge")]["requires_approval"] is True
+
+
 def test_string_output_and_pass_without_findings_can_reach_gate(tmp_path):
     h = setup_harness(tmp_path)
     start_reviews(h)

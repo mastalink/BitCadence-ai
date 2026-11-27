@@ -67,7 +67,8 @@ VERDICT_CONTRACT = (
     "Reply with ONE JSON object and nothing else:\n"
     '{"verdict": "pass" | "fail", "findings": [{"where": "...", "problem": "...", "fix": "..."}], '
     '"notes": "what you actually inspected"}\n'
-    "Fail only for a concrete problem you can point at. Never claim to have watched, listened to or opened "
+    "Fail only for a concrete problem you can point at. A pass may list non-blocking findings; "
+    "they go to the merge approver as notes and do not start a fix round. Never claim to have watched, listened to or opened "
     "something you did not."
 )
 

@@ -563,11 +563,11 @@ class TestRegressions:
     def test_broken_worker_is_not_a_reroute_target(self, db):
         now = _now()
         db.table("agent_registry").insert({
-            "instance_id": "claude-mac", "role": "claude", "status": "online",
+            "instance_id": "claude-secondary", "role": "claude", "status": "online",
             "last_seen_at": now.isoformat(),
         }).execute()
         db.table("agent_registry").insert({
-            "instance_id": "codex-primary", "role": "codex", "status": "online",
+            "instance_id": "codex-primary", "role": "codex", "status": "broken",
             "last_seen_at": now.isoformat(),
         }).execute()
         db.table("agent_jobs").insert({
@@ -578,9 +578,9 @@ class TestRegressions:
         described = presence.describe_fleet(
             db,
             [
-                {"instance_id": "codex-primary", "role": "codex", "status": "online",
+                {"instance_id": "codex-primary", "role": "codex", "status": "broken",
                  "last_seen_at": now.isoformat()},
-                {"instance_id": "claude-mac", "role": "claude", "status": "online",
+                {"instance_id": "claude-secondary", "role": "claude", "status": "online",
                  "last_seen_at": now.isoformat()},
             ],
             threshold=PRESENCE_THRESHOLD, connected=set(), stall_seconds=STALL,
@@ -595,21 +595,26 @@ class TestRegressions:
             return presence.available_roles(fleet, org)
 
         config = {**BASE, "MCO_ROUTE_FALLBACKS": "grok:codex|claude"}
-        _job(db, age_seconds=STALL + 5, job_id="from-grok", role="grok", instance="grok-mac")
+        _job(db, age_seconds=STALL + 5, job_id="from-grok", role="grok", instance="grok-secondary")
         delivery.sweep(db, config=config, online_roles=online_roles)
         result = delivery.sweep(db, now=_later(STALL), config=config, online_roles=online_roles)
         assert _row(db, "from-grok")["target_agent_role"] == "claude"
         assert result.rerouted == ["from-grok"]
 
-    def test_presence_broken_derivation_still_holds(self, db):
+    def test_presence_preserves_delivery_warnings_for_available_workers(self, db):
         _presence_job(db, "stuck", role="codex", target="codex-primary", age=STALL + 120)
         row = _describe(db, [_agent("codex-primary", "codex")], {"codex-primary"})["codex-primary"]
-        assert row["state"] == "broken"
+        assert row["state"] == "standby"
+        assert "addressed to it untaken" in row["state_reason"]
         _presence_job(db, "moved", status="completed", role="claude")
         record_event(db, "moved", delivery.REROUTED, "system", "delivery",
                      {"from_role": "codex", "from_instance": "codex-primary", "to_role": "claude"})
-        moved = _describe(db, [_agent("codex-primary", "codex")], {"codex-primary"})["codex-primary"]
-        assert moved["state"] == "broken"
+        moved, = presence.describe_fleet(
+            db, [_agent("codex-primary", "codex")], threshold=PRESENCE_THRESHOLD,
+            connected={"codex-primary"}, stall_seconds=STALL, now=_now(),
+        )
+        assert moved["state"] == "standby"
+        assert "rerouted away" in moved["state_reason"]
 
     def test_crashloop_safeguard_unchanged(self, tmp_path):
         from tests.test_agentd_supervisor import test_five_failures_in_window_crashloop_and_stop_restarting

@@ -12,7 +12,7 @@ The desktop executable is separate and is covered under [Windows Local Control a
 
 ## GUI coverage
 
-The [GUI reference](gui-reference.md) covers thirteen console destinations, Score/detail views, the five-page dashboard, administration/lock/modal flows, Windows/tray actions and **33 server-driven settings**. Its [336 grouped control/workflow mappings](_review/gui-feature-coverage.json) link instructions to current component/function locations. The phone follow-up is based on `ee45a86`, not a claim that an already running app was updated.
+The [GUI reference](gui-reference.md) covers thirteen console destinations, Score/detail views, the five-page dashboard, administration/lock/modal flows, Windows/tray actions and **33 server-driven settings**. Its [344 grouped control/workflow mappings](_review/gui-feature-coverage.json) link instructions to current component/function locations. The phone follow-up is based on `ee45a86`, not a claim that an already running app was updated.
 
 This is grouped coverage, not every dynamic record/option. Unreachable legacy components are separate. Isolated behavior fixtures and measured disposable/fixture browser checks support the [U01–U24 ledger](UX-REVIEW.md); production deployment, physical-device behavior, screen-reader conformance and end-to-end work are not inferred.
 

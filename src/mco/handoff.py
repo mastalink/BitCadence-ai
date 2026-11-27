@@ -329,7 +329,8 @@ class Harness:
 
     def _review_round(self, wp: Package, panel: list[reviews.Reviewer], round_number: int,
                       parent_id: str, revision: Revision, repo: str,
-                      write: bool) -> tuple[str, list[str], list[dict]]:
+                      write: bool) -> tuple[str, list[str], list[dict], list[dict]]:
+        """Return (status, completed review ids, failures, non-blocking findings from passes)."""
         suffix = f"-fix-{round_number}" if round_number else ""
         ids = {r.family: self.job_id(wp.id, f"review-{r.family}{suffix}") for r in panel}
         jobs = {family: self._job(job_id) for family, job_id in ids.items()}
@@ -342,7 +343,7 @@ class Harness:
                 or job.get("depends_on") != [parent_id]
                 or job.get("title") != f"[review] {subject} ({reviewer.family})"
             ):
-                return f"blocked: existing {reviewer.family} review does not match this round", [], []
+                return f"blocked: existing {reviewer.family} review does not match this round", [], [], []
         missing = [r for r in panel if jobs[r.family] is None]
         if missing:
             if write:
@@ -355,9 +356,9 @@ class Harness:
                     panel=missing, min_families=len(missing),
                     depends_on=[parent_id], job_ids={r.family: ids[r.family] for r in missing},
                 )
-            return ("reviews posted" if write else "ready to post reviews"), [], []
+            return ("reviews posted" if write else "ready to post reviews"), [], [], []
 
-        completed, failures, missing_verdict = [], [], []
+        completed, failures, missing_verdict, notes = [], [], [], []
         pending = False
         cutoff = datetime.now(timezone.utc) - _REVIEW_DEADLINE
         for family, job in jobs.items():
@@ -368,7 +369,10 @@ class Harness:
                 completed.append(ids[family])
                 result = _result(job)
                 verdict, findings = result.get("verdict"), result.get("findings", [])
-                if verdict == "pass" and findings == []:
+                if verdict == "pass" and isinstance(findings, list):
+                    # A pass may carry non-blocking findings: they reach the merge approver, no fix round.
+                    if findings:
+                        notes.append({"family": family, "findings": findings})
                     continue
                 if verdict == "fail" and isinstance(findings, list) and findings:
                     failures.append({"family": family, "result": result})
@@ -386,10 +390,10 @@ class Harness:
                            f"Manual review triage required for {subject}. Required reviewer verdicts are missing. "
                            f"Leave the PR open for the owner.\n\nReview outcomes\n{outcomes}",
                            [parent_id, *completed], requires_approval=True)
-            return ("escalated" if write else "ready to escalate review"), [], []
+            return ("escalated" if write else "ready to escalate review"), [], [], []
         if pending:
-            return "awaiting reviews", [], []
-        return "", completed, failures
+            return "awaiting reviews", [], [], []
+        return "", completed, failures, notes
 
     def _next_round(self, wp: Package, round_number: int, depends: list[str], revision: Revision,
                     repo: str, failures: list[dict], write: bool) -> str:
@@ -414,7 +418,8 @@ class Harness:
             )
         return f"fix round {next_round} {'posted' if write else 'ready'}"
 
-    def _post_gate(self, wp: Package, revision: Revision, repo: str, depends: list[str], write: bool) -> str:
+    def _post_gate(self, wp: Package, revision: Revision, repo: str, depends: list[str], write: bool,
+                   notes: list[dict] | None = None) -> str:
         if wp.activation and not revision.evidence:
             return "blocked: activation evidence is required"
         if not write:
@@ -435,6 +440,9 @@ class Harness:
                 f"Merge using gh pr merge {revision.pr} --repo {repo} --match-head-commit {revision.head} "
                 "with the repository's allowed merge method, then report the merge."
             )
+        if notes:
+            prompt += ("\n\nNon-blocking reviewer findings (each review passed)\n"
+                       + json.dumps(notes, ensure_ascii=False, indent=2))
         self._send(
             wp, "merge", self.program.gate_role,
             f"{prompt}\n\nReviewed evidence\n{_bullets(revision.evidence)}",
@@ -447,8 +455,8 @@ class Harness:
         gate = self._job(self.job_id(wp.id, "merge"))
         if gate is not None:
             return self._gate_state(wp, gate)
-        if self._job(self.job_id(wp.id, "escalate")) is not None:
-            return "escalated"
+        # An escalation is not terminal: when a late reviewer completes every verdict, the package
+        # moves on to the owner-approved merge gate. Re-posting the escalation is a no-op.
         repo = self.deployment.repository(wp.repo)
         panel = self._panel(wp)
         previous = None
@@ -471,7 +479,7 @@ class Harness:
                 return "blocked: PR head or base differs from the reported revision"
             if pr.state != "OPEN" or pr.draft:
                 return "blocked: PR must be open and ready for review"
-            status, completed, failures = self._review_round(wp, panel, round_number, parent["id"], revision, repo, write)
+            status, completed, failures, notes = self._review_round(wp, panel, round_number, parent["id"], revision, repo, write)
             if status:
                 return status
             depends = [parent["id"], *completed]
@@ -479,7 +487,7 @@ class Harness:
                 return self._next_round(wp, round_number, depends, revision, repo, failures, write)
             if not pr.green:
                 return "waiting for green PR checks"
-            return self._post_gate(wp, revision, repo, depends, write)
+            return self._post_gate(wp, revision, repo, depends, write, notes)
         raise RuntimeError(f"{wp.id}: could not reconcile fix rounds")
 
     def _reconcile(self, write: bool, builds_only: bool) -> dict[str, str]:

@@ -3,7 +3,7 @@
 
 The console at /console ships as a single self-contained HTML file
 (``src/mco/static/console.html``): a gzip+base64 manifest of assets plus a
-template that references them by UUID. That file is a *generated artifact* —
+static shell and loader that reference them by UUID. That file is a *generated artifact* —
 this script is the missing build step that makes it maintainable.
 
 Editable application sources live in ``src/mco/console_src/`` (one file per
@@ -15,9 +15,8 @@ embedded in the committed HTML, which is used as the build base.
     python scripts/build_console.py build      # console_src/ -> HTML  (after editing sources)
     python scripts/build_console.py verify      # round-trip check, writes nothing
 
-The app scripts carry no Subresource-Integrity hashes (and the loader strips
-SRI at runtime anyway), so re-gzipping with a different compressor is safe:
-fidelity means the *decompressed* bytes match, not the compressed bytes.
+Assets are addressed by UUID; fidelity means the decompressed bytes match,
+not the compressed bytes.
 """
 from __future__ import annotations
 
@@ -35,6 +34,12 @@ INDEX = SRC / "index.json"
 
 _MANIFEST_RE = re.compile(
     r'(<script type="__bundler/manifest">)(.*?)(</script>)', re.S
+)
+
+_LOADER_RE = re.compile(r'(<script(?: id="__bundler_loader")?>)\s*document\.addEventListener.*?</script>', re.S)
+_SHELL_RE = re.compile(
+    r'<template id="__bundler_head">.*?</template>\s*<template id="__bundler_body">.*?</template>'
+    r'|<script type="__bundler/template">.*?</script>', re.S
 )
 
 # Assets small enough to be hand-edited application code. Everything else in the
@@ -110,6 +115,15 @@ def build(check_only: bool = False) -> None:
         # Always re-encode from source so the manifest reflects console_src/.
         manifest[uuid]["data"] = _encode(raw, meta["compressed"])
     out = _write_manifest(html, manifest)
+    for name, pattern in (("loader.js", _LOADER_RE), ("shell.html", _SHELL_RE)):
+        source = _source_bytes(SRC / name).decode("utf-8").strip()
+        if name == "loader.js":
+            source = '<script id="__bundler_loader">\n' + source + '\n</script>'
+        out, count = pattern.subn(lambda match: source, out, count=1)
+        if not count:
+            raise SystemExit(f"Could not find the shell block for {name}")
+        if pattern.search(html).group() != source:
+            changed += 1
     if check_only:
         # Decode every patched entry back out and confirm it matches the source.
         rebuilt = _read_manifest(out)

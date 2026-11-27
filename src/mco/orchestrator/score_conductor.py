@@ -73,16 +73,14 @@ class Conductor:
             self.bridge.fleet = self._fleet
 
     # States in which the board itself says an agent is not taking jobs.
-    _UNAVAILABLE_STATES = frozenset({"broken", "offline"})
+    _UNAVAILABLE_STATES = frozenset({"broken", "offline", "out_of_quota", "disabled"})
     _FLEET_CACHE_SECONDS = 30.0
 
     def _fleet(self) -> dict:
         """{instance_id: {role, available, state}} from the board's presence view.
 
-        "broken" is the board's word for an agent that is connected but has left
-        a job addressed to it untaken (out of usage, a runner that keeps
-        crashing); it counts as unavailable the same as offline. Kept for a few
-        seconds so a sweep ticking several runs asks the board once, not per run.
+        The board signals routing ineligibility after an explicit fault or a
+        recent reroute. Cache the view briefly so a sweep queries it once.
         """
         cached = getattr(self, "_fleet_cache", None)
         if cached is not None and time.monotonic() - cached[0] < self._FLEET_CACHE_SECONDS:
@@ -96,7 +94,7 @@ class Conductor:
             view[agent["instance_id"]] = {
                 "role": agent.get("role"),
                 "state": state,
-                "available": online and state not in self._UNAVAILABLE_STATES,
+                "available": online and state not in self._UNAVAILABLE_STATES and agent.get("routing_available", True),
             }
         self._fleet_cache = (time.monotonic(), view)
         return view
