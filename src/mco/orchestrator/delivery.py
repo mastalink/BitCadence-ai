@@ -233,11 +233,11 @@ def sweep(
         return result
 
     now = now or datetime.now(timezone.utc)
-    for recovered in recover_quota(db):
+    for recovered in recover_quota(db, now=now):
         result.broadcasts.append(('job_pending', recovered))
     for expired in expire_waiting(db, now=now, config=config):
         result.broadcasts.append(('job_updated', expired))
-    unavailable = quota_workers(db, now=now, config=config)
+    unavailable_by_org: dict[str, set] = {}
     fallbacks = parse_fallbacks(config.get("MCO_ROUTE_FALLBACKS"))
     max_reroutes = get_max_reroutes(config)
     online_roles = online_roles or _online_roles
@@ -291,6 +291,9 @@ def sweep(
         role = str(job.get("target_agent_role") or "").lower()
         payload = job.get("input_payload") or {}
         org = job.get("org_id") or "default"
+        if org not in unavailable_by_org:
+            unavailable_by_org[org] = quota_workers(db, org=org, now=now, config=config)
+        unavailable = unavailable_by_org[org]
         target = None
         target_id = None
         reason = None
@@ -348,7 +351,7 @@ def sweep(
                 continue  # leased or changed since we read it: delivery happened
             record_event(db, job_id, REROUTED, ACTOR_ID, ACTOR_ROLE,
                          {"from_role": job.get("target_agent_role"),
-                          "from_instance": job.get("target_agent_id"),
+                          "from_instance": job.get("target_agent_id"), "org_id": org,
                           "to_role": target, "to_instance": target_id,
                           "pending_seconds": int(age)})
             result.broadcasts.append(("job_pending", updated[0]))

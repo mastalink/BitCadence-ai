@@ -132,7 +132,7 @@ async def handle_job_lease(
         from mco.orchestrator.worker_policy import can_run, quota_workers
         before = await run_in_threadpool(lambda: db_client.table('agent_jobs').select('*').eq('id', task_id).execute())
         if before.data and (not can_run(before.data[0], str(before.data[0].get('target_agent_role') or ''), agent_instance_id)
-                            or agent_instance_id in await run_in_threadpool(quota_workers, db_client)):
+                            or agent_instance_id in await run_in_threadpool(quota_workers, db_client, org=before.data[0].get('org_id') or 'default')):
             await send_error('Worker lacks required capabilities or is out of quota', correlation_id)
             return
         success = await run_in_threadpool(
@@ -219,12 +219,13 @@ async def handle_job_update(
             if deferred:
                 updated_job = deferred
                 await broadcast_event('job_pending', updated_job)
-            elif replayed:
+                await send_ack({'status': 'job_updated', 'job': updated_job})
+                return
+            if replayed:
                 current = await run_in_threadpool(lambda: db_client.table('agent_jobs').select('*').eq('id', task_id).execute())
-                if current.data:
-                    updated_job = current.data[0]
-            await send_ack({'status': 'job_updated', 'job': updated_job})
-            return
+                if current.data and current.data[0].get('lease_id') != claim.get('lease_id'):
+                    await send_ack({'status': 'job_updated', 'job': current.data[0], 'replayed': True})
+                    return
         await run_in_threadpool(
             record_event,
             db_client,

@@ -30,8 +30,17 @@ def can_run(job, role, instance, config=None):
         return False
 
 
+_QUOTA_EVENT = 'worker_out_of_quota'
+_MAX_DEFERRALS = 2
+_RECOVERY_WINDOW = timedelta(minutes=15)
+
+
 def quota_error(message):
-    return bool(re.search(r'\b402\b|out of credits|insufficient credits|credit balance|quota exceeded|out of quota', str(message or ''), re.I))
+    return bool(re.match(
+        r'^\s*(?:HTTP(?:/\d(?:\.\d)?)?\s+402(?=\s|:|$)|'
+        r'(?:API error:\s*)?(?:insufficient_quota|insufficient_credits)(?=\s|:|$))',
+        str(message or ''), re.I,
+    ))
 
 
 def defer_quota(db, job, actor):
@@ -39,33 +48,66 @@ def defer_quota(db, job, actor):
     from mco.orchestrator.audit import record_event
     from mco.orchestrator.store_context import transaction
     with transaction(db):
-        record_event(db, job['id'], 'worker_out_of_quota', actor.get('instance_id'), actor.get('role'), None,
-                     outbox_id=f"quota:{job.get('lease_id')}")
-        rows = db.table('agent_jobs').update({
+        current = (db.table('agent_jobs').select('archived').eq('id', job['id'])
+                   .eq('status', 'failed').eq('lease_id', job.get('lease_id')).execute().data or [])
+        if not current or current[0].get('archived'):
+            return None
+        outbox_id = f"quota:{job.get('lease_id')}"
+        attempts = db.table('agent_job_events').select('outbox_id').eq('job_id', job['id']).eq(
+            'event', _QUOTA_EVENT
+        ).limit(_MAX_DEFERRALS).execute().data or []
+        if len(attempts) >= _MAX_DEFERRALS and not any(event.get('outbox_id') == outbox_id for event in attempts):
+            return None
+        # A hosted update is a separate request. Commit evidence first so a
+        # crash leaves enough information to replay this same deferral.
+        record_event(db, job['id'], _QUOTA_EVENT, actor.get('instance_id'), actor.get('role'),
+                     {'org_id': job.get('org_id') or 'default'}, outbox_id=outbox_id)
+        update = db.table('agent_jobs').update({
             'status': 'pending', 'leased_by_instance_id': None, 'lease_id': None,
             'lease_expires_at': None, 'completed_at': None,
             'error_message': 'Worker out of quota; waiting for an eligible worker.'
-        }).eq('id', job['id']).eq('status', 'failed').eq('lease_id', job.get('lease_id')).execute().data or []
+        }).eq('id', job['id']).eq('status', 'failed').eq('lease_id', job.get('lease_id'))
+        if current[0].get('archived') is None:
+            update = update.is_('archived', 'null')
+        else:
+            update = update.eq('archived', False)
+        rows = update.execute().data or []
     return rows[0] if rows else None
 
 
-def recover_quota(db):
-    rows = db.table('agent_jobs').select('*').eq('status', 'failed').execute().data or []
+def recover_quota(db, *, now=None):
+    cutoff = (now or datetime.now(timezone.utc)) - _RECOVERY_WINDOW
+    rows = (db.table('agent_jobs').select('*').eq('status', 'failed')
+            .gt('lease_expires_at', cutoff.isoformat()).execute().data or [])
     recovered = []
     for job in rows:
-        if job.get('lease_id') and job.get('leased_by_instance_id') and quota_error(job.get('error_message')):
-            updated = defer_quota(db, job, {'instance_id': job['leased_by_instance_id'], 'role': job.get('target_agent_role')})
-            if updated:
-                recovered.append(updated)
+        lease_id = job.get('lease_id')
+        worker = job.get('leased_by_instance_id')
+        completed = _parse_ts(job.get('completed_at'))
+        if not lease_id or not worker or job.get('archived') or (completed and completed <= cutoff):
+            continue
+        if not quota_error(job.get('error_message')):
+            continue
+        receipts = db.table('mco_attempt_receipts').select('updates,job').eq('id', lease_id).execute().data or []
+        if not receipts or receipts[0]['job'].get('id') != job['id']:
+            continue
+        updates = receipts[0]['updates']
+        if updates.get('status') != 'failed' or updates.get('error_message') != job.get('error_message'):
+            continue
+        updated = defer_quota(db, job, {'instance_id': worker, 'role': job.get('target_agent_role')})
+        if updated:
+            recovered.append(updated)
     return recovered
 
 
-def quota_workers(db, *, now=None, config=None):
+def quota_workers(db, *, org='default', now=None, config=None):
     cfg = config if config is not None else get_config()
     try:
         seconds = max(1, int(cfg.get('MCO_QUOTA_COOLDOWN_SECONDS', 3600)))
     except (ValueError, TypeError):
         seconds = 3600
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(seconds=seconds)
-    rows = db.table('agent_job_events').select('*').eq('event', 'worker_out_of_quota').gt('created_at', cutoff.isoformat()).execute().data or []
-    return {r.get('actor_id') for r in rows if _parse_ts(r.get('created_at')) and _parse_ts(r['created_at']) > cutoff}
+    rows = db.table('agent_job_events').select('*').eq('event', _QUOTA_EVENT).gt('created_at', cutoff.isoformat()).execute().data or []
+    return {r['actor_id'] for r in rows
+            if r.get('actor_id') and (_parse_ts(r.get('created_at')) or cutoff) > cutoff
+            and ((r.get('detail') or {}).get('org_id') or r.get('org_id') or 'default') == org}

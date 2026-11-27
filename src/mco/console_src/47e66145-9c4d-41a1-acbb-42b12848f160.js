@@ -156,8 +156,8 @@
 
   async function pollOnce(version) {
     try {
-      // The server pages storage; use the same complete list as mco_jobs.
-      const [j, a] = await Promise.all([api("/api/jobs"), api("/api/agents"), refreshApprovals(version)]);
+      // Keep the full board visible without downloading historical job results.
+      const [j, a] = await Promise.all([api("/api/jobs?compact=true"), api("/api/agents"), refreshApprovals(version)]);
       if (version !== connectionVersion) return;
       const normalized = (j || []).map(withWorkflow);
       const seenBefore = Object.keys(prevStatus).length > 0;

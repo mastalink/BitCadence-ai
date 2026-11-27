@@ -336,6 +336,14 @@ STATUS_SORT_ORDER = {
 }
 
 
+_BOARD_COLUMNS = (
+    "id,org_id,title,description,source_agent_id,source_agent_role,target_agent_role,"
+    "target_agent_id,status,leased_by_instance_id,depends_on,input_payload,created_at,"
+    "started_at,completed_at,error_message,requires_approval,approved_by,max_retries,"
+    "retry_count,escalate_to_role,archived,reassigned_from_job_id,reassigned_to_job_id,priority"
+)
+
+
 @router.get("")
 def get_jobs(
     include_archived: bool = False,
@@ -343,6 +351,7 @@ def get_jobs(
     limit: Optional[int] = None,
     agent: dict = Depends(require_scopes("jobs:read")),
     offset: int = 0,
+    compact: bool = False,
 ):
     """Retrieve job list from the database.
 
@@ -360,20 +369,69 @@ def get_jobs(
     if effective_sort not in ("created_desc", "created_asc", "priority_desc", "status"):
         effective_sort = "created_desc"
     try:
-        query = db_client.table("agent_jobs").select("*").eq("org_id", agent_org(agent))
-        query = query.order("id", desc=False)
-        # Page through storage before applying the visible-row window: hosted
-        # stores cap a single select, and archived rows must not consume it.
-        jobs, start = [], 0
-        while True:
-            res = query.range(start, start + 499).execute()
-            page = res.data or []
-            jobs.extend(page)
-            start += len(page)
-            if len(page) < 500:
-                break
-        if not include_archived:
-            jobs = [j for j in jobs if not j.get("archived")]
+        from mco.orchestrator.store_context import is_postgres
+
+        org = agent_org(agent)
+        offset = max(0, offset)
+        bounded = limit is not None and limit > 0
+        date_sort = effective_sort in {"created_asc", "created_desc"}
+        columns = _BOARD_COLUMNS if compact else "*"
+
+        def visible(fields):
+            query = db_client.table("agent_jobs").select(fields).eq("org_id", org)
+            if not include_archived:
+                # Older embedded documents omitted the column entirely.
+                query = query.eq("archived", False) if is_postgres(db_client) else query.in_("archived", [False, None])
+            return query
+
+        if bounded and date_sort and limit <= 500:
+            jobs = (visible(columns).order("created_at", desc=effective_sort == "created_desc")
+                    .range(offset, offset + limit - 1).execute().data or [])
+        else:
+            # The cursor is monotonic even if rows are added mid-read. For
+            # custom sorts, sort small metadata first and hydrate only the window.
+            jobs, cursor = [], None
+            fields = "id,created_at,status,priority" if bounded and not date_sort else columns
+            while True:
+                query = visible(fields)
+                if cursor is not None:
+                    query = query.gt("id", cursor)
+                page = query.order("id").limit(500).execute().data or []
+                jobs.extend(page)
+                if len(page) < 500:
+                    break
+                cursor = page[-1]["id"]
+
+            if effective_sort == "created_asc":
+                jobs.sort(key=lambda j: j.get("created_at") or "")
+            elif effective_sort == "created_desc":
+                jobs.sort(key=lambda j: j.get("created_at") or "", reverse=True)
+            elif effective_sort == "priority_desc":
+                jobs.sort(key=lambda j: (j.get("priority") or 0, j.get("created_at") or ""), reverse=True)
+            else:
+                jobs.sort(key=lambda j: (
+                    STATUS_SORT_ORDER.get(j.get("status"), 99),
+                    -(j.get("priority") or 0),
+                    j.get("created_at") or "",
+                ))
+            jobs = jobs[offset:offset + limit] if bounded else jobs[offset:]
+            if fields != columns:
+                ids = [job["id"] for job in jobs]
+                found = {}
+                for start in range(0, len(ids), 100):
+                    found.update({job["id"]: job for job in
+                                  (visible(columns).in_("id", ids[start:start + 100]).execute().data or [])})
+                jobs = [found[job_id] for job_id in ids if job_id in found]
+
+        if compact:
+            active = [j for j in jobs if j["status"] in {"leased", "in_progress"}]
+            for start in range(0, len(active), 100):
+                batch = active[start:start + 100]
+                outputs = visible("id,output_payload").in_("id", [j["id"] for j in batch]).execute().data or []
+                by_id = {output["id"]: output.get("output_payload") for output in outputs}
+                for job in batch:
+                    if job["id"] in by_id:
+                        job["output_payload"] = by_id[job["id"]]
 
         # Project names live outside execution payloads. Overlay the reviewed
         # assignment for presentation while leaving the stored job untouched.
@@ -398,20 +456,7 @@ def get_jobs(
             # migration lands. The board still works and shows Unassigned.
             logger.debug("Project assignments unavailable: %s", exc)
 
-        if effective_sort == "created_asc":
-            jobs.sort(key=lambda j: j.get("created_at") or "")
-        elif effective_sort == "created_desc":
-            jobs.sort(key=lambda j: j.get("created_at") or "", reverse=True)
-        elif effective_sort == "priority_desc":
-            jobs.sort(key=lambda j: (j.get("priority") or 0, j.get("created_at") or ""), reverse=True)
-        elif effective_sort == "status":
-            jobs.sort(key=lambda j: (
-                STATUS_SORT_ORDER.get(j.get("status"), 99),
-                -(j.get("priority") or 0),
-                j.get("created_at") or "",
-            ))
-        start = max(0, offset)
-        return jobs[start:start + limit] if limit is not None and limit > 0 else jobs[start:]
+        return jobs
     except Exception as e:
         logger.error(f"Error fetching jobs: {e}")
         return []
@@ -775,7 +820,7 @@ def _pending_for_agent(db_client, role: str, instance_id, agent: dict) -> list:
     priority cannot starve equally-urgent older work.
     """
     from mco.orchestrator.worker_policy import can_run, quota_workers
-    if instance_id in quota_workers(db_client):
+    if instance_id in quota_workers(db_client, org=agent_org(agent)):
         return []
     res = db_client.table("agent_jobs")        .select("*")        .eq("status", "pending")        .eq("target_agent_role", role)        .execute()
 
@@ -962,7 +1007,7 @@ async def lease_job(payload: dict, agent: dict = Depends(require_scopes("jobs:wr
                     detail="Cannot lease a job not addressed to you",
                 )
             from mco.orchestrator.worker_policy import can_run, quota_workers
-            if not can_run(j, agent['role'], agent_instance_id, get_config()) or agent_instance_id in await run_in_threadpool(quota_workers, db_client):
+            if not can_run(j, agent['role'], agent_instance_id, get_config()) or agent_instance_id in await run_in_threadpool(quota_workers, db_client, org=agent_org(agent)):
                 raise HTTPException(status_code=403, detail='Worker lacks required capabilities or is out of quota')
 
         ttl = effective_lease_ttl(payload.get("estimated_seconds"))

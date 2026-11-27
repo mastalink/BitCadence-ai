@@ -746,17 +746,20 @@ function MetaRow({ label, children }) {
 function JobDetail({ jobId, jobs, tone, advanced, onClose, onOpen }) {
   const [fetchedJob, setFetchedJob] = useStateJ(null);
   const [fetchError, setFetchError] = useStateJ("");
-  const j = jobs.find((x) => x.id === jobId) || (fetchedJob?.id === jobId ? fetchedJob : null);
+  const boardJob = jobs.find((x) => x.id === jobId);
+  const detail = fetchedJob?.id === jobId ? fetchedJob : null;
+  const j = boardJob ? { ...detail, ...boardJob } : detail;
+  const needsDetail = !boardJob || (advanced && !Object.hasOwn(boardJob, "output_payload"));
   useEffectJ(() => {
     let stopped = false;
     setFetchError("");
-    if (!jobs.some(job => job.id === jobId) && window.BitCadenceStore.fetchJob) {
+    if (needsDetail && window.BitCadenceStore.fetchJob) {
       window.BitCadenceStore.fetchJob(jobId).then(job => {
         if (!stopped) { setFetchedJob(job); if (!job) setFetchError("This job is unavailable with the current connection."); }
       }).catch(error => { if (!stopped) setFetchError(error.message); });
     }
     return () => { stopped = true; };
-  }, [jobId, jobs]);
+  }, [jobId, needsDetail, boardJob?.status, boardJob?.completed_at]);
   const [reason, setReason] = useStateJ("");
   const [rejecting, setRejecting] = useStateJ(false);
   const [cancelling, setCancelling] = useStateJ(false);

@@ -48,7 +48,7 @@ def stale_candidates(db, *, org=None, now=None, config=None, waiting_only=False)
         if j.get('status') in {'leased', 'in_progress', 'needs_approval', 'completed'} or j.get('started_at') or not old(j):
             return False
         if j.get('status') == 'pending':
-            return True
+            return not waiting_only
         parents = j.get('depends_on') or []
         return bool(parents) and any(abandoned(by_id.get((j.get('org_id') or 'default', p)), seen | {j['id']}) for p in parents)
 
@@ -72,7 +72,7 @@ def expire_waiting(db, *, now=None, config=None):
     expired = []
     for job in stale_candidates(db, now=now, config=config, waiting_only=True):
         rows = db.table('agent_jobs').update({
-            'status': 'halted', 'error_message': 'Dependency wait expired: prerequisite is missing, stopped, or never started.'
+            'status': 'halted', 'error_message': 'Dependency wait expired: prerequisite is missing, stopped, or cyclic.'
         }).eq('id', job['id']).eq('status', 'waiting').execute().data or []
         if rows:
             record_event(db, job['id'], 'dependency_expired', 'system', 'delivery', {'depends_on': job.get('depends_on') or []})

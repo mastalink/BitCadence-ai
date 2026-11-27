@@ -168,7 +168,7 @@ def test_console_paginates_and_has_preview_before_cleanup():
     root = Path(__file__).parents[1] / 'src/mco/console_src'
     store = (root / '47e66145-9c4d-41a1-acbb-42b12848f160.js').read_text(encoding='utf-8')
     board = (root / '5adac14f-6645-4e02-866b-22c4e571989b.js').read_text(encoding='utf-8')
-    assert 'api("/api/jobs")' in store and '/api/jobs?limit=200' not in store
+    assert 'api("/api/jobs?compact=true")' in store and '/api/jobs?limit=200' not in store
     assert '/api/jobs/cancel-stale' in store
     assert 'Preview stale jobs' in board and 'Cancel stale jobs' in board
     assert 'preview_id' in store
@@ -218,7 +218,10 @@ def test_quota_cooldown_expires_automatically(db):
 
 
 def test_maintenance_recovers_interrupted_quota_deferral(db):
-    job(db, status='failed', lease_id='old-attempt', leased_by_instance_id='grok-renderer-a', error_message='HTTP 402 out of credits')
+    from mco.orchestrator.leases import fenced_update
+    job(db)
+    proof = acquire_lease(db, 'job', 'grok-renderer-a')
+    fenced_update(db, 'job', proof.as_claim(), {'status': 'failed', 'error_message': 'HTTP 402 out of credits'})
     delivery.sweep(db, config={})
     assert row(db)['status'] == 'pending'
     assert not row(db).get('lease_id')
@@ -247,3 +250,88 @@ async def test_direct_lease_cannot_bypass_capabilities(db, monkeypatch):
     with pytest.raises(HTTPException) as e:
         await routes.lease_job({'task_id': 'job', 'agent_instance_id': 'grok-renderer-a'}, {'instance_id': 'grok-renderer-a', 'role': 'grok', 'org_id': 'default'})
     assert e.value.status_code == 403
+
+@pytest.mark.parametrize("message", ["AssertionError: tests/test_x.py:402", "PR #402 failed", "write failed: disk quota exceeded"])
+def test_unrelated_failures_are_not_quota(message):
+    from mco.orchestrator.worker_policy import quota_error
+    assert not quota_error(message)
+
+
+@pytest.mark.parametrize("archived,age", [(False, 90), (True, 0)])
+def test_sweep_does_not_revive_historical_or_archived_failures(db, archived, age):
+    completed = datetime.now(timezone.utc) - timedelta(days=age)
+    job(db, status='failed', lease_id='old-attempt', leased_by_instance_id='grok-renderer-a',
+        completed_at=completed.isoformat(), archived=archived, error_message='HTTP 402 out of credits')
+    delivery.sweep(db, config={})
+    assert row(db)['status'] == 'failed'
+
+
+def test_quota_deferrals_have_a_per_job_cap(db):
+    from mco.orchestrator.worker_policy import defer_quota
+    actor = {'instance_id': 'grok-renderer-a', 'role': 'grok'}
+    job(db, status='failed', lease_id='attempt-1', leased_by_instance_id=actor['instance_id'])
+    assert defer_quota(db, row(db), actor)
+    db.table('agent_jobs').update({'status': 'failed', 'lease_id': 'attempt-2'}).eq('id', 'job').execute()
+    assert defer_quota(db, row(db), actor)
+    db.table('agent_jobs').update({'status': 'failed', 'lease_id': 'attempt-3'}).eq('id', 'job').execute()
+    assert defer_quota(db, row(db), actor) is None
+    assert row(db)['status'] == 'failed'
+
+
+@pytest.mark.asyncio
+async def test_old_pending_parent_can_still_release_its_child(db):
+    from mco.orchestrator.handlers import _unlock_dependents
+    from mco.orchestrator.stale import expire_waiting
+    job(db, 'parent')
+    job(db, 'child', status='waiting', depends_on=['parent'])
+    assert expire_waiting(db) == []
+    db.table('agent_jobs').update({'status': 'completed'}).eq('id', 'parent').execute()
+    await _unlock_dependents(db, 'parent', AsyncMock())
+    assert row(db, 'child')['status'] == 'pending'
+
+
+def test_quota_cooldown_is_tenant_local(db):
+    from mco.orchestrator.worker_policy import defer_quota
+    job(db, 'other-failure', org_id='other', status='failed', lease_id='other-attempt',
+        leased_by_instance_id='grok-renderer-a')
+    job(db)
+    defer_quota(db, row(db, 'other-failure'), {'instance_id': 'grok-renderer-a', 'role': 'grok'})
+    assert [item['id'] for item in routes._pending_for_agent(db, 'grok', 'grok-renderer-a', {'org_id': 'default'})] == ['job']
+
+
+def test_recent_reroute_is_evidence_of_worker_unavailability(db):
+    from mco.orchestrator.audit import record_event
+    job(db, 'rerouted', target_agent_id='grok-renderer-b')
+    record_event(db, 'rerouted', delivery.REROUTED, 'delivery', 'system', {'from_instance': 'grok-renderer-a'})
+    agent = {'instance_id': 'grok-renderer-a', 'role': 'grok', 'status': 'online'}
+    fleet = presence.describe_fleet(db, [agent], threshold=300, connected={'grok-renderer-a'}, now=datetime.now(timezone.utc))
+    assert fleet[0]['state'] == 'broken'
+    assert presence.available_roles(fleet) == set()
+
+
+def test_full_console_board_omits_terminal_outputs_and_limited_reads_window_storage(db, monkeypatch):
+    job(db, 'latest', status='completed', output_payload={'result': 'large'},
+        created_at=datetime.now(timezone.utc).isoformat())
+    job(db, 'older', status='completed', output_payload={'result': 'large'})
+    monkeypatch.setattr(routes, 'get_db_client', lambda: db)
+    queries = []
+    run = db._run
+    def capture(query):
+        if query._table == 'agent_jobs':
+            queries.append(query)
+        return run(query)
+    monkeypatch.setattr(db, '_run', capture)
+    assert [j['id'] for j in routes.get_jobs(limit=1, agent={'org_id': 'default'})] == ['latest']
+    assert queries[0]._limit == 1
+    compact = routes.get_jobs(agent={'org_id': 'default'}, compact=True)
+    assert {j['id'] for j in compact} == {'older', 'latest'}
+    assert all('output_payload' not in j for j in compact)
+    assert 'output_payload' not in queries[-1]._columns
+
+
+def test_bundled_console_never_reparses_dom_text_as_html():
+    from pathlib import Path
+    html = (Path(__file__).parents[1] / 'src/mco/static/console.html').read_text(encoding='utf-8')
+    assert 'parseFromString(' not in html
+    assert '<template id="__bundler_head">' in html
+    assert '<template id="__bundler_body">' in html

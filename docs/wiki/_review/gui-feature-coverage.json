@@ -255,7 +255,7 @@
       "id": "gui-021",
       "surface": "console",
       "screen": "drawer",
-      "control": "Close \u00d7",
+      "control": "Close ×",
       "effect": "local_view",
       "verification": "source_implemented",
       "source": "src/mco/console_src/32c20ad6-cc53-43b3-a432-3a75e249b495.js",
@@ -907,7 +907,7 @@
       "effect": "draft",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 929,
+      "line": 932,
       "source_anchor": "function NewJobForm(",
       "documentation": "gui-reference.md#create-a-job"
     },
@@ -919,7 +919,7 @@
       "effect": "draft",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 929,
+      "line": 932,
       "source_anchor": "function NewJobForm(",
       "documentation": "gui-reference.md#create-a-job"
     },
@@ -931,7 +931,7 @@
       "effect": "draft",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 929,
+      "line": 932,
       "source_anchor": "function NewJobForm(",
       "documentation": "gui-reference.md#create-a-job"
     },
@@ -943,7 +943,7 @@
       "effect": "draft",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 929,
+      "line": 932,
       "source_anchor": "function NewJobForm(",
       "documentation": "gui-reference.md#create-a-job"
     },
@@ -955,7 +955,7 @@
       "effect": "draft",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 929,
+      "line": 932,
       "source_anchor": "function NewJobForm(",
       "documentation": "gui-reference.md#create-a-job"
     },
@@ -967,7 +967,7 @@
       "effect": "draft",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 929,
+      "line": 932,
       "source_anchor": "function NewJobForm(",
       "documentation": "gui-reference.md#create-a-job"
     },
@@ -979,7 +979,7 @@
       "effect": "draft",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 929,
+      "line": 932,
       "source_anchor": "function NewJobForm(",
       "documentation": "gui-reference.md#create-a-job"
     },
@@ -987,11 +987,11 @@
       "id": "gui-082",
       "surface": "console",
       "screen": "New job",
-      "control": "Cancel / \u00c3\u2014",
+      "control": "Cancel / Ã—",
       "effect": "draft",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 929,
+      "line": 932,
       "source_anchor": "function NewJobForm(",
       "documentation": "gui-reference.md#create-a-job"
     },
@@ -1003,7 +1003,7 @@
       "effect": "work_write",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 929,
+      "line": 932,
       "source_anchor": "function NewJobForm(",
       "documentation": "gui-reference.md#create-a-job"
     },
@@ -1015,7 +1015,7 @@
       "effect": "local_view",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 929,
+      "line": 932,
       "source_anchor": "function NewJobForm(",
       "documentation": "gui-reference.md#create-a-job"
     },
@@ -1027,7 +1027,7 @@
       "effect": "local_view",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 929,
+      "line": 932,
       "source_anchor": "function NewJobForm(",
       "documentation": "gui-reference.md#create-a-job"
     },
@@ -1071,7 +1071,7 @@
       "id": "gui-089",
       "surface": "console",
       "screen": "Job details",
-      "control": "Close \u00c3\u2014",
+      "control": "Close Ã—",
       "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
@@ -2443,7 +2443,7 @@
       "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 1058,
+      "line": 1061,
       "source_anchor": "function ActivityFeedScreen(",
       "documentation": "gui-reference.md#activity"
     },
@@ -2455,7 +2455,7 @@
       "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 1058,
+      "line": 1061,
       "source_anchor": "function ActivityFeedScreen(",
       "documentation": "gui-reference.md#activity"
     },
@@ -2467,7 +2467,7 @@
       "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 1058,
+      "line": 1061,
       "source_anchor": "function ActivityFeedScreen(",
       "documentation": "gui-reference.md#activity"
     },
@@ -2479,7 +2479,7 @@
       "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 1058,
+      "line": 1061,
       "source_anchor": "function ActivityFeedScreen(",
       "documentation": "gui-reference.md#activity"
     },
@@ -2491,7 +2491,7 @@
       "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 1058,
+      "line": 1061,
       "source_anchor": "function ActivityFeedScreen(",
       "documentation": "gui-reference.md#activity"
     },
@@ -2503,7 +2503,7 @@
       "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 1058,
+      "line": 1061,
       "source_anchor": "function ActivityFeedScreen(",
       "documentation": "gui-reference.md#activity"
     },
@@ -2515,7 +2515,7 @@
       "effect": "read",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 1058,
+      "line": 1061,
       "source_anchor": "function ActivityFeedScreen(",
       "documentation": "gui-reference.md#activity"
     },
@@ -2527,7 +2527,7 @@
       "effect": "local_view",
       "verification": "source_implemented",
       "source": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "line": 1058,
+      "line": 1061,
       "source_anchor": "function ActivityFeedScreen(",
       "documentation": "gui-reference.md#activity"
     },
@@ -4159,11 +4159,11 @@
     },
     {
       "path": "src/mco/console_src/47e66145-9c4d-41a1-acbb-42b12848f160.js",
-      "sha256": "330500d4a9b17b90f2a625a0efe4806e8c480fdc360a0476c29cf062909b3541"
+      "sha256": "b563262721d3de7866369ece5b67c1eb947d74444ca90b06d6237bee4b5c6846"
     },
     {
       "path": "src/mco/console_src/5adac14f-6645-4e02-866b-22c4e571989b.js",
-      "sha256": "339e498d3b570780aa0b705374954273829b08447e89df43a1b3e7bc321b837d"
+      "sha256": "fd21ef813ccc372eeb7e1a766b0c2e6beb926946fefc69b89567fb7a0d2a307f"
     },
     {
       "path": "src/mco/console_src/8ec84a72-7b37-434d-a68b-2ac1188e3e6d.js",

@@ -11,7 +11,7 @@ schema change (so LocalStore and PostgreSQL behave the same):
 
   working  - holds a lease on a job right now
   out_of_quota - a fenced worker report identified a credit/quota problem
-  broken   - an explicit worker fault; queue age alone is not evidence
+  broken   - an explicit worker fault or recently rerouted work
   standby  - reachable and nothing waiting on it: a live waker socket, or a
              fresh heartbeat
   offline  - none of the above (and `disabled` passes through)
@@ -92,10 +92,7 @@ def describe_fleet(
     use_cache = now is None
     now = now or datetime.now(timezone.utc)
     from mco.orchestrator.worker_policy import quota_workers
-    try:
-        unavailable = quota_workers(db, now=now)
-    except Exception:
-        unavailable = set()
+    unavailable_by_org: dict[str, set] = {}
     stall = get_stall_seconds() if stall_seconds is None else stall_seconds
     connected = connected if connected is not None else (connected_instances() or set())
 
@@ -123,11 +120,12 @@ def describe_fleet(
         active, pending, reroutes = load_evidence()
 
     working = {job.get("leased_by_instance_id") for job in active if job.get("leased_by_instance_id")}
-    rerouted_from: dict[str, int] = {}
+    rerouted_from: dict[tuple, int] = {}
     for event in reroutes:
         source = (event.get("detail") or {}).get("from_instance")
         if source:
-            rerouted_from[source] = rerouted_from.get(source, 0) + 1
+            worker = ((event.get('detail') or {}).get('org_id') or event.get('org_id') or 'default', source)
+            rerouted_from[worker] = rerouted_from.get(worker, 0) + 1
 
     stalled = []
     if stall and stall > 0:
@@ -140,6 +138,12 @@ def describe_fleet(
     for raw in rows:
         row = decorate_presence(dict(raw), threshold)
         instance = row.get("instance_id")
+        org = row.get('org_id') or 'default'
+        if org not in unavailable_by_org:
+            try:
+                unavailable_by_org[org] = quota_workers(db, org=org, now=now)
+            except Exception:
+                unavailable_by_org[org] = set()
         live_socket = instance in connected
         if live_socket and row["effective_status"] == "offline" and raw.get("status") != DISABLED:
             row["effective_status"] = row["status"] = "online"
@@ -151,7 +155,7 @@ def describe_fleet(
         elif instance in working:
             state = WORKING
             reason = 'Busy with a leased job'
-        elif instance in unavailable:
+        elif instance in unavailable_by_org[org]:
             state = OUT_OF_QUOTA
             reason = 'Out of quota; retrying after the cooldown'
         elif raw.get('status') == BROKEN:
@@ -160,14 +164,12 @@ def describe_fleet(
         elif row["effective_status"] != "online":
             state = OFFLINE
         else:
-            waiting = [job for job in stalled if _addressed_to(job, row)]
-            moved = rerouted_from.get(instance, 0)
+            waiting = [job for job in stalled if (job.get('org_id') or 'default') == org and _addressed_to(job, row)]
+            moved = rerouted_from.get((org, instance), 0)
             if str(row.get("role") or "").lower() in _NON_WORKER_ROLES:
                 state = STANDBY
             elif waiting or moved:
-                # Queue age and delivery movement are evidence about delivery,
-                # not proof that the worker process has failed.
-                state = STANDBY
+                state = BROKEN if moved else STANDBY
                 parts = []
                 if waiting:
                     oldest = max(int((now - _parse_ts(j["created_at"])).total_seconds() // 60) for j in waiting)
