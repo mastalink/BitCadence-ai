@@ -123,7 +123,7 @@ def resolve_score_targets(
             continue
 
         state = row.get("state")
-        if state not in (STANDBY, WORKING):
+        if state not in (STANDBY, WORKING) or row.get("routing_available") is False:
             continue
 
         instance_id = row.get("instance_id")
