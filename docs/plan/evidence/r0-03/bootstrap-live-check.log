@@ -1,0 +1,10 @@
+2026-11-27T18:00:46+00:00  Registered BitCadence Runtime TEST-10a7b0b4197042c5a14e28e94fc6066d; isolated loopback ports control=50372, gateway=50381.
+2026-11-27T18:00:48+00:00  Initial start: runtime PID 616.
+2026-11-27T18:00:49+00:00  Second start refused: exit 3; original runtime still owns the isolated mutex.
+2026-11-27T18:01:50+00:00  Crash 1: PID 616 -> 69872; runtime process launched at +60.01s; heartbeat observed at +61.05s.
+2026-11-27T18:02:51+00:00  Crash 2: PID 69872 -> 1956; runtime process launched at +60.03s; heartbeat observed at +61.08s.
+2026-11-27T18:03:52+00:00  Crash 3: PID 1956 -> 70968; runtime process launched at +60.02s; heartbeat observed at +60.99s.
+2026-11-27T18:05:10+00:00  Deliberate runtime stop: stayed stopped for 66s; no replacement runtime.
+2026-11-27T18:05:10+00:00  Reboot and sign-in check deferred to R0-05 activation.
+2026-11-27T18:05:11+00:00  Isolated TEST task unregistered and no test runtime remains.
+2026-11-27T18:08:04+00:00  Rollback drill: unregistering BitCadence Runtime TEST-b3fb035272d24a01aa98814174baff24 ended its active runtime and repeated removal succeeded.

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import time
-from typing import Any
+from typing import Any, Optional
 
 import typer
 
@@ -68,6 +69,32 @@ def run(
         control_port=control_port or None,
     )
     raise typer.Exit(code=runtime.run())
+
+
+@runtime_app.command("install-bootstrap")
+def install_bootstrap(
+    xml: Optional[Path] = typer.Option(None, "--xml", help="Output path for the exported Scheduled Task XML."),
+) -> None:
+    """Register the current user's Windows sign-in task and export its XML."""
+    from .bootstrap import install_bootstrap as install
+
+    try:
+        path = install(_paths(), xml)
+    except (OSError, RuntimeError) as exc:
+        _fail(str(exc))
+    typer.echo(f"Bootstrap registered. Task XML: {path}")
+
+
+@runtime_app.command("uninstall-bootstrap")
+def uninstall_bootstrap() -> None:
+    """Remove the current user's Windows sign-in task."""
+    from .bootstrap import uninstall_bootstrap as uninstall
+
+    try:
+        uninstall()
+    except (OSError, RuntimeError) as exc:
+        _fail(str(exc))
+    typer.echo("Bootstrap removed.")
 
 
 @runtime_app.command("stop")

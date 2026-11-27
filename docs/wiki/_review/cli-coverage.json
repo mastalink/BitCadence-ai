@@ -6344,7 +6344,7 @@
       "hidden": false,
       "help": "The background runtime that owns the gateway, the scheduler and the workers.",
       "source": "src/mco/runtime/cli.py",
-      "line": 16,
+      "line": 17,
       "inherited_groups": [
         "mco"
       ],
@@ -6378,6 +6378,74 @@
       "ignore_unknown_options": false
     },
     {
+      "path": "mco runtime install-bootstrap",
+      "aliases": [
+        "bitcadence runtime install-bootstrap"
+      ],
+      "anchor": "cli-mco-runtime-install-bootstrap",
+      "group": false,
+      "hidden": false,
+      "help": "Register the current user's Windows sign-in task and export its XML.",
+      "source": "src/mco/runtime/cli.py",
+      "line": 74,
+      "inherited_groups": [
+        "mco",
+        "mco runtime"
+      ],
+      "parameters": [
+        {
+          "name": "xml",
+          "kind": "option",
+          "tokens": [
+            "--xml"
+          ],
+          "type": "PATH",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Output path for the exported Scheduled Task XML.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-runtime-install-bootstrap-param-xml"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-install-bootstrap-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
       "path": "mco runtime maintenance",
       "aliases": [
         "bitcadence runtime maintenance"
@@ -6387,7 +6455,7 @@
       "hidden": false,
       "help": "Maintenance mode: the runtime stays up, its children are stopped and schedules are held.",
       "source": "src/mco/runtime/cli.py",
-      "line": 115,
+      "line": 142,
       "inherited_groups": [
         "mco",
         "mco runtime"
@@ -6455,7 +6523,7 @@
       "hidden": false,
       "help": "Restore the previous last-known-good fleet configuration.",
       "source": "src/mco/runtime/cli.py",
-      "line": 140,
+      "line": 167,
       "inherited_groups": [
         "mco",
         "mco runtime"
@@ -6499,7 +6567,7 @@
       "hidden": false,
       "help": "Run the runtime in the foreground. Exit 0 only after a deliberate stop; non-zero means it crashed.",
       "source": "src/mco/runtime/cli.py",
-      "line": 55,
+      "line": 56,
       "inherited_groups": [
         "mco",
         "mco runtime"
@@ -6641,7 +6709,7 @@
       "hidden": false,
       "help": "Show the runtime's state. Exit 1 when it should be running and is not (crashed, dead or silent).",
       "source": "src/mco/runtime/cli.py",
-      "line": 97,
+      "line": 124,
       "inherited_groups": [
         "mco",
         "mco runtime"
@@ -6709,7 +6777,7 @@
       "hidden": false,
       "help": "Stop the runtime and its children deliberately (it exits 0 and is not restarted).",
       "source": "src/mco/runtime/cli.py",
-      "line": 73,
+      "line": 100,
       "inherited_groups": [
         "mco",
         "mco runtime"
@@ -6762,6 +6830,50 @@
           "path_readable": null,
           "path_writable": null,
           "anchor": "cli-mco-runtime-stop-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco runtime uninstall-bootstrap",
+      "aliases": [
+        "bitcadence runtime uninstall-bootstrap"
+      ],
+      "anchor": "cli-mco-runtime-uninstall-bootstrap",
+      "group": false,
+      "hidden": false,
+      "help": "Remove the current user's Windows sign-in task.",
+      "source": "src/mco/runtime/cli.py",
+      "line": 88,
+      "inherited_groups": [
+        "mco",
+        "mco runtime"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-runtime-uninstall-bootstrap-param-help"
         }
       ],
       "allow_extra_args": false,

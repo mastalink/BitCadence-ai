@@ -146,7 +146,7 @@ class Runtime:
             return "maintenance"
         return "quiesced" if stop_active() else "running"
 
-    def document(self, state: str | None = None) -> dict[str, object]:
+    def document(self, state: str | None = None, *, include_worker_errors: bool = False) -> dict[str, object]:
         workers = self.supervisor.status()
         assert isinstance(workers, list)
         return {
@@ -163,7 +163,10 @@ class Runtime:
             "config_generation": self.config.generation,
             "config_error": self.config.last_error,
             "children": {
-                str(item["name"]): {"state": item["state"], "pid": item["pid"]} for item in workers
+                str(item["name"]): {
+                    "state": item["state"], "pid": item["pid"],
+                    **({"last_error": item["last_error"]} if include_worker_errors else {}),
+                } for item in workers
             },
         }
 

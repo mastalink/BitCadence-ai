@@ -39,6 +39,32 @@ desktop tool runs it inside its own process, coupling supervision to a window.
 8. **Last-known-good configuration.** Invalid edits never replace a running generation; five validated generations
    are retained; rollback is one command.
 
+## Windows bootstrap commands
+
+Run `bitcadence runtime install-bootstrap` as the user who will run the runtime. It creates
+`BitCadence Runtime <Windows user SID>` and exports the registered XML to
+`~/.mco/runtime/bootstrap.xml`. Pass `--xml <path>` to choose another export location.
+Registration uses the current Python installation and package directory, so keep those paths
+available at sign-in. An existing task of that name must be uninstalled before reinstalling.
+
+The Scheduled Task starts a windowless launcher, which runs `python.exe` inside the
+hidden-console adapter and waits for its exit. A manual duplicate start returns 3. The
+launcher maps that result to 0 and ends without consuming a retry. A deliberate stop also
+ends the launcher with 0. The Windows drill found that returning a runtime crash code
+through a successfully started action did not trigger a retry. The launcher handles
+runtime process crashes with up to three retries, with a 60-second delay before each.
+The native task settings remain three attempts one minute apart for action launch
+failures. Runtime crash codes and retry decisions are written to `~/.mco/runtime/bootstrap.log`.
+
+Use `bitcadence runtime stop` for a graceful stop. To roll back bootstrap registration,
+run `bitcadence runtime uninstall-bootstrap`. This removes only the current user's
+managed task, ending its active action if needed, and keeps the XML export and runtime
+data. Reinstall from an available Python environment and sign in again to relaunch.
+
+The Tkinter desktop shows runtime state, processes and logs through the loopback
+`/v1` API. Open it with the desktop shortcut or `bitcadence-desktop`. Desktop exit
+closes the observer. The optional Startup shortcut also opens only the observer.
+
 ## Migration rules
 
 A production workload moves under the runtime only when all of these hold:

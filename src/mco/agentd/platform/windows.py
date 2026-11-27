@@ -213,7 +213,7 @@ class WindowsProcessHandle:
         except OSError:
             pass
 
-    def wait(self, timeout: float) -> int:
+    def wait(self, timeout: float | None) -> int:
         return self._process.wait(timeout=timeout)
 
     def close(self) -> None:

@@ -53,7 +53,7 @@ def create_runtime_app(runtime: "Runtime") -> FastAPI:
 
     @app.get("/v1/runtime", dependencies=protected)
     def get_runtime() -> dict[str, object]:
-        return runtime.document()
+        return runtime.document(include_worker_errors=True)
 
     @app.post("/v1/runtime/stop", dependencies=protected)
     def stop_runtime() -> dict[str, object]:
@@ -92,10 +92,11 @@ def call_runtime(
     token: str,
     json: Any = None,
     transport: httpx.BaseTransport | None = None,
+    timeout: float = 30.0,
 ) -> dict[str, Any]:
     base = f"http://{agentd_control.CONTROL_HOST}:{port}"
     try:
-        with httpx.Client(base_url=base, timeout=30.0, trust_env=False, transport=transport) as client:
+        with httpx.Client(base_url=base, timeout=timeout, trust_env=False, transport=transport) as client:
             sign = getattr(agentd_tokens, "sign_control_request", None)
             if sign is not None:
                 # Prove knowledge of the token without sending it to whatever holds the port.
