@@ -99,6 +99,16 @@ def verify_identity(
     """
     try:
         pid = int(record["pid"])  # type: ignore[arg-type]
+    except (KeyError, TypeError, ValueError):
+        return None, "record has no valid pid"
+    try:
+        process = process_factory(pid)
+    except psutil.NoSuchProcess:
+        return None, "gone: process no longer exists"
+    except psutil.Error as exc:
+        return None, f"process could not be inspected: {type(exc).__name__}"
+
+    try:
         create_time = float(record["create_time"])  # type: ignore[arg-type]
         user = str(record["user"])
         exe = str(record["exe"])
@@ -108,13 +118,6 @@ def verify_identity(
         return None, "record is incomplete (no start time, user, exe, argv or nonce)"
     if not isinstance(argv, list) or not nonce:
         return None, "record is incomplete (no argv or nonce)"
-
-    try:
-        process = process_factory(pid)
-    except psutil.NoSuchProcess:
-        return None, "gone: process no longer exists"
-    except psutil.Error as exc:
-        return None, f"process could not be inspected: {type(exc).__name__}"
 
     try:
         if abs(float(process.create_time()) - create_time) > START_TIME_TOLERANCE_SECONDS:

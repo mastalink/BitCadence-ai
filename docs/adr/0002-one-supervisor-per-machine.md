@@ -551,6 +551,13 @@ strictly larger.
 - **Upgrade protocol:** stop spawning, drain or terminate children against a
   deadline, hand the ownership lock over, install atomically, negotiate
   API/config schema version, health-check, then resume or roll back.
+- Before upgrading from the desktop supervisor, verify that its worker
+  processes have exited. Legacy pidfile records lack identity evidence for
+  signalling a live process. The daemon reports those processes for operator
+  inspection and removes records when their PIDs disappear.
+- Upgrade the local CLI and daemon together to use challenge-based request
+  signing. The CLI requires the challenge endpoint before making control or log
+  requests.
 - Version skew between gateway, daemon, console, and tray is expected during
   upgrade and must be negotiated, not assumed away.
 

@@ -757,3 +757,19 @@ def test_shutdown_in_any_state_leaves_nothing_scheduled(tmp_path: Path, prepare:
     assert len(adapter.spawn_calls) == spawned
     assert supervisor.workers["codex-primary"].next_start_at is None
     assert adapter.events[-1] == "unlock"
+
+
+def test_restart_preserves_crashloop_past_failure_counting_window(tmp_path):
+    clock = FakeClock()
+    first, adapter = _restart_supervisor(tmp_path, clock)
+    first.reconcile({"codex-primary": worker()})
+    _crashloop(first, adapter, clock)
+    clock.advance(301)
+    after, after_adapter = _restart_supervisor(tmp_path, clock)
+    after.reconcile({"codex-primary": worker()})
+    after.tick()
+    assert after.workers["codex-primary"].state == WorkerState.CRASHLOOPED
+    assert after_adapter.spawn_calls == []
+    clock.advance(599)
+    after.tick()
+    assert after.workers["codex-primary"].state == WorkerState.RUNNING

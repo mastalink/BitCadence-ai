@@ -1832,7 +1832,7 @@ def _agentd_request(method: str, path: str, *, logs: bool = False):
     """Call this user's supervisor. Reads the token; never creates one."""
     import httpx
     from mco.agentd.control import CONTROL_HOST, control_port
-    from mco.agentd.tokens import AGENTD_LOG_TOKEN_PATH, AGENTD_TOKEN_PATH
+    from mco.agentd.tokens import AGENTD_LOG_TOKEN_PATH, AGENTD_TOKEN_PATH, sign_control_request
 
     token_path = AGENTD_LOG_TOKEN_PATH if logs else AGENTD_TOKEN_PATH
     try:
@@ -1842,13 +1842,20 @@ def _agentd_request(method: str, path: str, *, logs: bool = False):
     if not token:
         console.print("[yellow]The supervisor is not running[/yellow] (no token found). Start it with: mco agentd run")
         raise typer.Exit(code=1)
-    url = f"http://{CONTROL_HOST}:{control_port()}{path}"
+    base_url = f"http://{CONTROL_HOST}:{control_port()}"
     try:
-        response = httpx.request(
-            method, url, headers={"Authorization": f"Bearer {token}"}, timeout=30.0, trust_env=False
-        )
-    except httpx.HTTPError:
-        console.print("[yellow]The supervisor is not running.[/yellow] Start it with: mco agentd run")
+        with httpx.Client(base_url=base_url, timeout=30.0, trust_env=False) as client:
+            challenge = client.get("/v1/auth-challenge").raise_for_status().json()["challenge"]
+            if not isinstance(challenge, str) or len(challenge) != 64 or any(
+                char not in "0123456789abcdef" for char in challenge
+            ):
+                raise ValueError("invalid agentd challenge")
+            request = client.build_request(method, path)
+            proof = sign_control_request(token, challenge, request.method, request.url.raw_path)
+            request.headers["Authorization"] = f"Agentd-HMAC {challenge}:{proof}"
+            response = client.send(request)
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        console.print("[yellow]The supervisor is unavailable or needs an upgrade.[/yellow] Start it with: mco agentd run")
         raise typer.Exit(code=1)
     if response.status_code >= 400:
         console.print(f"[red][X][/red] {response.status_code}: {response.text}")

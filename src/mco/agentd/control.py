@@ -13,15 +13,18 @@ from __future__ import annotations
 import hashlib
 import os
 import secrets
+from threading import Lock
+from time import monotonic
 from typing import Any, Callable, cast
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from starlette.concurrency import run_in_threadpool
 import uvicorn
 
 from .config import FleetConfigManager, FleetWatcher, GenerationConflict
 from .logs import LogAggregator
 from .supervisor import STATE_SCHEMA_VERSION, Supervisor
-from .tokens import AgentdTokenStore, current_user_sid
+from .tokens import AgentdTokenStore, current_user_sid, sign_control_request
 
 
 CONTROL_HOST = "127.0.0.1"
@@ -95,8 +98,24 @@ def create_control_app(
     log_token_provider = log_token_provider or token_store.logs_token
     gateway_reachable = gateway_reachable or (lambda: False)
 
-    def _require(expected: str, authorization: str | None) -> None:
+    challenges: dict[str, float] = {}
+    challenge_lock = Lock()
+
+    def _require(request: Request, expected: str, authorization: str | None) -> None:
         scheme, _, supplied = (authorization or "").partition(" ")
+        if scheme.casefold() == "agentd-hmac":
+            challenge, separator, proof = supplied.partition(":")
+            with challenge_lock:
+                expiry = challenges.pop(challenge, 0)
+            target = request.scope["raw_path"]
+            query = request.scope["query_string"]
+            if query:
+                target += b"?" + query
+            if (separator and expiry >= monotonic() and secrets.compare_digest(
+                proof.encode("utf-8"), sign_control_request(expected, challenge, request.method, target).encode("ascii")
+            )):
+                return
+            raise HTTPException(status_code=401, detail="invalid or expired request proof")
         if scheme.casefold() != "bearer" or not secrets.compare_digest(
             supplied.encode("utf-8"), expected.encode("utf-8")
         ):
@@ -120,19 +139,30 @@ def create_control_app(
             )
 
     def require_control_token(
+        request: Request,
         authorization: str | None = Header(default=None),
         x_bitcadence_agentd_api: str | None = Header(default=None),
     ) -> None:
-        _require(token_provider(), authorization)
+        _require(request, token_provider(), authorization)
         _negotiate(x_bitcadence_agentd_api)
 
-    def require_log_token(authorization: str | None = Header(default=None)) -> None:
-        _require(log_token_provider(), authorization)
+    def require_log_token(request: Request, authorization: str | None = Header(default=None)) -> None:
+        _require(request, log_token_provider(), authorization)
 
     app = FastAPI(title="BitCadence agentd control API", version="1")
     app.state.agentd_supervisor = supervisor
     protected = [Depends(require_control_token)]
     log_protected = [Depends(require_log_token)]
+
+    @app.get("/v1/auth-challenge")
+    def issue_challenge(response: Response) -> dict[str, str]:
+        challenge = secrets.token_hex(32)
+        with challenge_lock:
+            if len(challenges) >= 256:
+                challenges.pop(next(iter(challenges)))
+            challenges[challenge] = monotonic() + 30.0
+        response.headers["Cache-Control"] = "no-store"
+        return {"challenge": challenge}
 
     def daemon_document() -> dict[str, object]:
         document: dict[str, object] = {
@@ -229,7 +259,7 @@ def create_control_app(
                 detail="send the generation you read (If-Match header, or JSON 'generation')",
             )
         try:
-            watcher.replace(content, expected)
+            await run_in_threadpool(watcher.replace, content, expected)
         except GenerationConflict as exc:
             raise HTTPException(
                 status_code=409,

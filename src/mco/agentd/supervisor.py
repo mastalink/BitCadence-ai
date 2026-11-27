@@ -622,10 +622,15 @@ class Supervisor:
         # A failure "in the future" means the wall clock moved backwards. It
         # must not become a way to hide failures, nor to pin them forever.
         runtime.failure_timestamps = deque(min(item, now) for item in timestamps)
-        self._prune_failures(runtime, now)
+        latched = bool(raw.get("crashlooped"))
+        if not latched:
+            self._prune_failures(runtime, now)
+        elif not runtime.failure_timestamps:
+            # A prior version may already have pruned the latch timestamp.
+            runtime.failure_timestamps.append(now)
         if raw.get("override") == OVERRIDE_STOPPED:
             runtime.override = OVERRIDE_STOPPED
-        if bool(raw.get("crashlooped")) or len(runtime.failure_timestamps) >= CRASH_LIMIT:
+        if latched or len(runtime.failure_timestamps) >= CRASH_LIMIT:
             runtime.state = WorkerState.CRASHLOOPED
             runtime.last_error = "crash-loop latch restored from persistent state"
         self._persist_runtime(runtime)

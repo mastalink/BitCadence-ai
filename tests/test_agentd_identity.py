@@ -332,3 +332,10 @@ def test_a_real_legacy_waker_left_running_is_found_and_ours_is_not(tmp_path: Pat
     finally:
         identity.kill_verified_tree(psutil.Process(legacy.pid))
         legacy.wait(timeout=10)
+
+
+def test_dead_legacy_pid_is_removed_without_signalling(tmp_path):
+    report, killed = _reap(tmp_path, {"pid": 11, "command": "pythonw.exe", "created": 42}, None)
+    assert killed == []
+    assert report.left_alone == []
+    assert identity.read_records(tmp_path / "agentd.pids") == []

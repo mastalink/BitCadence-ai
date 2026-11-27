@@ -317,3 +317,65 @@ def test_drain_and_resume_are_exposed_for_upgrades(tmp_path: Path) -> None:
     worker = client.get("/v1/workers", headers=AUTH).json()[0]
     assert worker["state"] == "running" and worker["desired"] == "running"
     assert len(adapter.spawn_calls) == 2
+
+
+def test_cli_never_sends_the_token_to_an_unproven_listener(tmp_path, monkeypatch):
+    import httpx
+    import pytest
+    import typer
+    from mco import cli
+    from mco.agentd import tokens
+
+    token = tmp_path / "token"
+    token.write_text("private-token", encoding="utf-8")
+    monkeypatch.setattr(tokens, "AGENTD_TOKEN_PATH", token)
+    seen = []
+
+    def listener(request):
+        seen.append(request)
+        return httpx.Response(404)
+
+    original = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: original(transport=httpx.MockTransport(listener), **kwargs))
+    monkeypatch.setattr(httpx, "request", lambda method, url, **kwargs: listener(
+        httpx.Request(method, url, headers=kwargs.get("headers"))))
+    with pytest.raises(typer.Exit):
+        cli._agentd_request("GET", "/v1/status")
+    assert len(seen) == 1
+    assert seen[0].url.path == "/v1/auth-challenge"
+    assert "authorization" not in seen[0].headers
+
+
+def test_config_reconcile_runs_off_the_event_loop(tmp_path, monkeypatch):
+    import asyncio
+    client, _ = build_client(tmp_path)
+    original = FleetWatcher.replace
+
+    def replace(self, *args):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return original(self, *args)
+        raise AssertionError("fleet reconciliation ran on the event loop")
+
+    monkeypatch.setattr(FleetWatcher, "replace", replace)
+    response = client.put("/v1/config", content=FLEET, headers={**AUTH, "If-Match": '"absent"'})
+    assert response.status_code == 200, response.text
+
+
+def test_signed_request_is_single_use_and_bound_to_method_and_target(tmp_path):
+    from mco.agentd.tokens import sign_control_request
+    client, supervisor = build_client(tmp_path)
+
+    def signed(method, target, key="secret"):
+        challenge = client.get("/v1/auth-challenge").json()["challenge"]
+        proof = sign_control_request(key, challenge, method, target.encode("ascii"))
+        return {"Authorization": f"Agentd-HMAC {challenge}:{proof}"}
+
+    headers = signed("GET", "/v1/status")
+    assert client.get("/v1/status", headers=headers).status_code == 200
+    assert client.get("/v1/status", headers=headers).status_code == 401
+    assert client.post("/v1/workers/example/start", headers=signed("GET", "/v1/status")).status_code == 401
+    assert supervisor.actions == []
+    path = "/v1/logs?limit=3"
+    assert client.get(path, headers=signed("GET", path, "log-secret")).status_code == 200

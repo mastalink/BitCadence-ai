@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hmac
 import os
 from pathlib import Path
 import secrets
@@ -12,6 +13,11 @@ import tempfile
 
 AGENTD_TOKEN_PATH = Path.home() / ".mco" / "agentd.token"
 AGENTD_LOG_TOKEN_PATH = Path.home() / ".mco" / "agentd.logs.token"
+
+
+def sign_control_request(token: str, challenge: str, method: str, target: bytes) -> str:
+    message = b"bitcadence-agentd-v1\n" + challenge.encode("ascii") + b"\n" + method.encode("ascii") + b"\n" + target
+    return hmac.digest(token.encode("utf-8"), message, "sha256").hex()
 
 
 class AgentdTokenStore:
