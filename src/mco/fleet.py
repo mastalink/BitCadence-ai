@@ -147,7 +147,9 @@ def apply_fleet(path: Path = FLEET_CONFIG_PATH) -> list[str]:
         # Refuse before anything is uninstalled.
         from mco import cockpit
         try:
-            herdr_path = cockpit.find_herdr(cockpit.load_cockpit().herdr)
+            # declared() is what `cockpit up` will run: validating it here also catches a cockpit.toml pane label
+            # that collides with a pane worker's name, which would otherwise fail only after the services are gone.
+            herdr_path = cockpit.find_herdr(cockpit.declared(fleet_path=path).herdr)
         except cockpit.CockpitConfigError as exc:
             raise FleetConfigError(f"mode=pane needs a valid cockpit.toml: {exc}") from exc
         if not herdr_path:

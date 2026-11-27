@@ -146,6 +146,14 @@ def test_pinned_missing_herdr_never_falls_back_to_path(monkeypatch):
     assert cockpit.Herdr().exe == "C:/other/herdr.exe"   # nothing pinned: PATH discovery still works
 
 
+def test_pinned_herdr_that_is_a_directory_counts_as_missing(tmp_path, monkeypatch):
+    monkeypatch.delenv("BITCADENCE_HERDR", raising=False)
+    assert cockpit.find_herdr(str(tmp_path)) is None
+    exe = tmp_path / "herdr.exe"
+    exe.write_text("", encoding="utf-8")
+    assert cockpit.find_herdr(str(exe)) == str(exe)
+
+
 def test_status_reports_missing_herdr_instead_of_all_panes_stopped(tmp_path):
     cfg = _write(tmp_path / "cockpit.toml", '[[pane]]\nworkspace = "w"\nlabel = "a"\ncommand = "echo a"\n')
     with pytest.raises(cockpit.HerdrError, match="not installed"):

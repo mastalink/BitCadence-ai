@@ -93,7 +93,7 @@ def find_herdr(configured: Optional[str] = None) -> Optional[str]:
     for candidate in (os.environ.get("BITCADENCE_HERDR"), configured):
         if candidate:
             path = os.path.expanduser(candidate)
-            return path if os.path.exists(path) else None
+            return path if os.path.isfile(path) else None   # a directory is not a herdr executable
     return shutil.which("herdr")
 
 
