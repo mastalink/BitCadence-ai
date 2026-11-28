@@ -808,6 +808,8 @@ app.add_typer(fleet_app, name="fleet")
 
 from mco.runtime.cli import runtime_app  # noqa: E402 - registered beside fleet
 app.add_typer(runtime_app, name="runtime")
+from mco.runtime.plugins.cli import plugin_app  # noqa: E402 - registered beside runtime
+app.add_typer(plugin_app, name="plugin")
 
 schedule_app = typer.Typer(help="Schedules and loops: what work gets created, and when.")
 app.add_typer(schedule_app, name="schedule")

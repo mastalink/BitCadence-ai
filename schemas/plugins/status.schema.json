@@ -1,0 +1,110 @@
+{
+  "$defs": {
+    "SecretState": {
+      "additionalProperties": false,
+      "properties": {
+        "expires_at": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At"
+        },
+        "present": {
+          "title": "Present",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "present"
+      ],
+      "title": "SecretState",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "health": {
+      "enum": [
+        "ok",
+        "degraded",
+        "error"
+      ],
+      "title": "Health",
+      "type": "string"
+    },
+    "message": {
+      "anyOf": [
+        {
+          "maxLength": 1024,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Message"
+    },
+    "metrics": {
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,63}$": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "title": "Metrics",
+      "type": "object"
+    },
+    "needs_you": {
+      "items": {
+        "maxLength": 1024,
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Needs You",
+      "type": "array"
+    },
+    "schema": {
+      "const": "bitcadence.status/1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "secrets": {
+      "maxProperties": 32,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,63}$": {
+          "$ref": "#/$defs/SecretState"
+        }
+      },
+      "title": "Secrets",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "health"
+  ],
+  "title": "Status",
+  "type": "object"
+}

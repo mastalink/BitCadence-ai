@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "Component": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "label": {
+          "maxLength": 1024,
+          "title": "Label",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "heading",
+            "text",
+            "badge",
+            "metric",
+            "table",
+            "action"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "label"
+      ],
+      "title": "Component",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "components": {
+      "items": {
+        "$ref": "#/$defs/Component"
+      },
+      "maxItems": 64,
+      "title": "Components",
+      "type": "array"
+    },
+    "schema": {
+      "const": "bitcadence.view/1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 1024,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "title",
+    "components"
+  ],
+  "title": "View",
+  "type": "object"
+}

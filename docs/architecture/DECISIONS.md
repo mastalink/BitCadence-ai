@@ -106,6 +106,8 @@ standalone runtime in the desktop's Rust workspace behind the same contract - is
 
 ## 6. Plugin contract (summary)
 
+For deployment, schemas and the loopback API, see [Runtime plugin contract v1](PLUGIN-CONTRACT.md).
+
 Plugins are declarative manifests (`bitcadence-plugin.toml`) that point at **external commands**; no plugin code runs
 inside the runtime, the gateway, the desktop process or the webview.
 

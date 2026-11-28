@@ -20,6 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "fastapi>=0.100.0",
+    "pydantic==2.12.5", # Lock code-generated plugin schema output.
     "uvicorn>=0.20.0",
     "supabase>=1.0.0,<3.0.0",
     "httpx>=0.24.0",

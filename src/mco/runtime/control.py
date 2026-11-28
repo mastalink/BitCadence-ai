@@ -14,6 +14,7 @@ from mco.agentd import control as agentd_control
 from mco.agentd import tokens as agentd_tokens
 
 from .config import RollbackUnavailable
+from .plugins.runner import PluginRefused
 
 if TYPE_CHECKING:  # pragma: no cover
     from .core import Runtime
@@ -21,6 +22,11 @@ if TYPE_CHECKING:  # pragma: no cover
 
 class MaintenanceRequest(BaseModel):
     enabled: bool
+
+
+class PluginActionRequest(BaseModel):
+    parameters: dict[str, Any]
+    grant: dict[str, Any]
 
 
 def default_control_port() -> int:
@@ -54,6 +60,34 @@ def create_runtime_app(runtime: "Runtime") -> FastAPI:
     @app.get("/v1/runtime", dependencies=protected)
     def get_runtime() -> dict[str, object]:
         return runtime.document(include_worker_errors=True)
+
+    @app.get("/v1/plugins", dependencies=protected)
+    def get_plugins() -> dict[str, object]:
+        with runtime._state_lock:
+            if runtime.plugins is None:
+                raise HTTPException(status_code=503, detail="plugin runner unavailable")
+            return {"audience": runtime.plugins.audience, "plugins": runtime.plugins.document()}
+
+    @app.post("/v1/plugins/{plugin}/actions/{action}", dependencies=protected, status_code=202)
+    def run_plugin_action(plugin: str, action: str, request: PluginActionRequest) -> dict[str, str]:
+        with mutation():
+            if runtime.plugins is None:
+                raise HTTPException(status_code=503, detail="plugin runner unavailable")
+            try:
+                run = runtime.plugins.start_action(plugin, action, request.parameters, request.grant)
+            except PluginRefused as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from None
+            return {"run": run}
+
+    @app.get("/v1/plugins/actions/{run}", dependencies=protected)
+    def get_plugin_action(run: str) -> dict:
+        with runtime._state_lock:
+            if runtime.plugins is None:
+                raise HTTPException(status_code=503, detail="plugin runner unavailable")
+            result = runtime.plugins.action_result(run)
+            if result is None:
+                raise HTTPException(status_code=404, detail="action run not found")
+            return result
 
     @app.post("/v1/runtime/stop", dependencies=protected)
     def stop_runtime() -> dict[str, object]:
