@@ -1,0 +1,6 @@
+{
+  "identifier": "desktop-main",
+  "description": "Allows the main webview to report a completed paint.",
+  "webviews": ["main"],
+  "permissions": ["allow-report-first-paint"]
+}

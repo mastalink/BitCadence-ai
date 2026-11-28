@@ -1,0 +1,42 @@
+name: Desktop
+
+on:
+  push:
+    branches: [main]
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+  pull_request:
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.22.1'
+          package-manager-cache: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          package_json_file: desktop/ui/package.json
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.14'
+      - name: Frontend checks and build
+        working-directory: desktop/ui
+        run: pnpm install --frozen-lockfile && pnpm typecheck && pnpm test && pnpm build
+      - name: Rust checks
+        run: cargo fmt --all --check && cargo clippy --locked --workspace --all-targets -- -D warnings && cargo test --locked --workspace
+      - name: Tauri release build
+        working-directory: desktop/app
+        run: ../ui/node_modules/.bin/tauri.cmd build --no-bundle --ci -- --locked
+      - name: Offline self-test and console window watch
+        run: python tests/smoke_windows.py target/release/bitcadence-desktop.exe
