@@ -37,6 +37,7 @@ from .config import RuntimeConfig
 from .control import create_runtime_app, default_control_port
 from .lkg import LkgStore
 from .paths import HEARTBEAT_SECONDS, RuntimePaths, atomic_write
+from .plugins.runner import PluginRunner
 from .supervision import RuntimeSupervisor, ServiceProcess, default_services
 
 
@@ -125,6 +126,7 @@ class Runtime:
         self._last_reported: tuple[object, ...] | None = None
         self._server: uvicorn.Server | None = None
         self._server_thread: threading.Thread | None = None
+        self.plugins: PluginRunner | None = None
         self._process_created = psutil.Process().create_time()
 
     def _foreign_owner(self, config: Any) -> int | None:
@@ -188,6 +190,8 @@ class Runtime:
             if enabled:
                 atomic_write(self.paths.maintenance, b"maintenance\n")
                 self.supervisor.hold()
+                if self.plugins is not None:
+                    self.plugins.tick()
             else:
                 self.paths.maintenance.unlink(missing_ok=True)
                 self.supervisor.release()
@@ -208,10 +212,16 @@ class Runtime:
         if self.control_port is None:
             self.control_port = default_control_port()
         with self._state_lock:
-            if self.serve_control:
-                self._start_control()
             if self.paths.maintenance.exists():
                 self.supervisor.held = True
+            if self.serve_control:
+                self._start_control()
+            self.plugins = PluginRunner(
+                self.paths.home, self.adapter, blocked=lambda: self.maintenance or self._stop.is_set(),
+                say=self.note, clock=self.clock,
+                control_credentials=(self.token_store.control_token(), self.token_store.logs_token())
+                if self.serve_control else (),
+            )
             self.config.load_initial()
             self.write_heartbeat()
         self.note(f"runtime started, state {self.state}")
@@ -248,6 +258,8 @@ class Runtime:
                 return
             self.config.poll()
             self.supervisor.tick()
+            if self.plugins is not None:
+                self.plugins.tick()
         reported = (self.state, self.config.generation, self.config.last_error)
         if reported != self._last_reported or self.clock() >= self._next_heartbeat:
             self._last_reported = reported
@@ -261,9 +273,14 @@ class Runtime:
         with self._state_lock:
             if self._server is not None:
                 self._server.should_exit = True
-        self.supervisor.shutdown()
-        if self._server_thread is not None:
-            self._server_thread.join(timeout=10)
+            plugins, self.plugins = self.plugins, None
+        try:
+            if plugins is not None:
+                plugins.close()
+        finally:
+            self.supervisor.shutdown()
+            if self._server_thread is not None:
+                self._server_thread.join(timeout=10)
 
     def run(self, *, handle_signals: bool = True) -> int:
         restore: list[tuple[int, Any]] = []

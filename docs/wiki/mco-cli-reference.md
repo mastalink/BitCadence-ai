@@ -74,6 +74,8 @@ This reference covers every registered command and group recursively, every posi
 - [mco orgs](#cli-mco-orgs) — List orgs available for registration (Control Panel tenancy dropdown, from the terminal).
 - [mco pause](#cli-mco-pause) — Pause everything: stop work in progress and hold new work.
 - [mco platform](#cli-mco-platform) — Run a connector control action directly (requires an approver-role token).
+- [mco plugin](#cli-mco-plugin) — Inspect declarative runtime plugins.
+  - [mco plugin validate](#cli-mco-plugin-validate) — Validate a plugin and resolve its command files without running them.
 - [mco reassign](#cli-mco-reassign) — Clone a failed job onto a new target, link both rows, and archive the old one (approver-role token).
 - [mco recall](#cli-mco-recall) — Recall the most relevant Drumline shared-context entries.
 - [mco register](#cli-mco-register) — Register a new client agent, generating a secure access token.
@@ -1206,6 +1208,28 @@ Implementation: [src/mco/cli.py:3385](../../src/mco/cli.py#L3385). Global/group 
 | <a id="cli-mco-platform-param-action"></a>`ACTION` (positional) | TEXT; required | required | Action name (see 'mco connectors'). |
 | <a id="cli-mco-platform-param-params"></a>`--params` | TEXT; optional | `{}` | JSON parameters for the action. |
 | <a id="cli-mco-platform-param-help"></a>`--help` | BOOLEAN; flag; optional | not set | Show this message and exit. |
+
+<a id="cli-mco-plugin"></a>
+## `mco plugin`
+
+Inspect declarative runtime plugins. See the [runtime plugin contract](../architecture/PLUGIN-CONTRACT.md).
+
+<a id="cli-mco-plugin-param-help"></a>
+- `--help` lists plugin commands.
+
+<a id="cli-mco-plugin-validate"></a>
+## `mco plugin validate`
+
+Usage example `bitcadence plugin validate plugins/example-hello`.
+
+<a id="cli-mco-plugin-validate-param-manifest"></a>
+- `MANIFEST` is the plugin directory or path to its manifest.
+
+<a id="cli-mco-plugin-validate-param-lock-entry"></a>
+- `--lock-entry` prints the candidate trust lock for owner review.
+
+<a id="cli-mco-plugin-validate-param-help"></a>
+- `--help` shows command options.
 
 <a id="cli-mco-reassign"></a>
 ## `mco reassign`

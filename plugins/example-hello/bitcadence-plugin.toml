@@ -1,0 +1,42 @@
+schema = "bitcadence.plugin/1"
+id = "example-hello"
+channels = ["example-channel"]
+job_title_prefixes = ["Example"]
+
+[identity]
+instance = "example-hello-agent"
+role = "plugin"
+
+[status]
+argv = ["python", "hello.py", "status"]
+interval_seconds = 15
+
+[schedules.hello]
+argv = ["python", "hello.py", "tick"]
+interval_seconds = 300
+channel = "example-channel"
+
+[actions.greet]
+argv = ["python", "hello.py", "greet"]
+channel = "example-channel"
+
+[[actions.greet.parameters]]
+name = "name"
+type = "string"
+
+[views.overview]
+schema = "bitcadence.view/1"
+title = "Example hello"
+
+[[views.overview.components]]
+type = "metric"
+label = "Example count"
+field = "count"
+
+[[views.overview.components]]
+type = "action"
+label = "Greet"
+action = "greet"
+
+[resources]
+node = "example-node"

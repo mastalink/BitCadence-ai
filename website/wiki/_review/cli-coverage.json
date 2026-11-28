@@ -5121,6 +5121,141 @@
       "ignore_unknown_options": false
     },
     {
+      "path": "mco plugin",
+      "aliases": [
+        "bitcadence plugin"
+      ],
+      "anchor": "cli-mco-plugin",
+      "group": true,
+      "hidden": false,
+      "help": "Inspect declarative runtime plugins.",
+      "source": "src/mco/runtime/plugins/cli.py",
+      "line": 14,
+      "inherited_groups": [
+        "mco"
+      ],
+      "parameters": [
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-plugin-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
+      "path": "mco plugin validate",
+      "aliases": [
+        "bitcadence plugin validate"
+      ],
+      "anchor": "cli-mco-plugin-validate",
+      "group": false,
+      "hidden": false,
+      "help": "Validate a plugin and resolve its command files without running them.",
+      "source": "src/mco/runtime/plugins/cli.py",
+      "line": 19,
+      "inherited_groups": [
+        "mco",
+        "mco plugin"
+      ],
+      "parameters": [
+        {
+          "name": "manifest",
+          "kind": "argument",
+          "tokens": [
+            "manifest"
+          ],
+          "type": "PATH",
+          "required": true,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": false,
+          "hidden": false,
+          "help": "Plugin directory or path to its manifest.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": false,
+          "path_readable": true,
+          "path_writable": false,
+          "anchor": "cli-mco-plugin-validate-param-manifest"
+        },
+        {
+          "name": "lock_entry",
+          "kind": "option",
+          "tokens": [
+            "--lock-entry"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": false,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Print the candidate trust lock for owner review.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-plugin-validate-param-lock-entry"
+        },
+        {
+          "name": "help",
+          "kind": "option",
+          "tokens": [
+            "--help"
+          ],
+          "type": "BOOLEAN",
+          "required": false,
+          "default": null,
+          "multiple": false,
+          "nargs": 1,
+          "is_flag": true,
+          "hidden": false,
+          "help": "Show this message and exit.",
+          "prompt": null,
+          "envvar": null,
+          "choices": null,
+          "min": null,
+          "max": null,
+          "path_exists": null,
+          "path_readable": null,
+          "path_writable": null,
+          "anchor": "cli-mco-plugin-validate-param-help"
+        }
+      ],
+      "allow_extra_args": false,
+      "ignore_unknown_options": false
+    },
+    {
       "path": "mco reassign",
       "aliases": [
         "bitcadence reassign"

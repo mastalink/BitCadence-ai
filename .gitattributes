@@ -3,6 +3,7 @@
 *.sh   text eol=lf
 *.bash text eol=lf
 install.sh text eol=lf
+schemas/plugins/*.schema.json text eol=lf
 
 # Keep batch/PowerShell installers as CRLF (Windows).
 *.bat  text eol=crlf

@@ -1,0 +1,517 @@
+{
+  "$defs": {
+    "Action": {
+      "additionalProperties": false,
+      "properties": {
+        "argv": {
+          "items": {
+            "maxLength": 4096,
+            "pattern": "^[^\\x00\\r\\n]*$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Argv",
+          "type": "array"
+        },
+        "channel": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channel"
+        },
+        "dangerous": {
+          "default": false,
+          "title": "Dangerous",
+          "type": "boolean"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/Parameter"
+          },
+          "maxItems": 32,
+          "title": "Parameters",
+          "type": "array"
+        },
+        "script_args": {
+          "description": "Additional zero-based argv indexes to resolve and pin as files.",
+          "items": {
+            "maximum": 63,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "title": "Script Args",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "default": 60,
+          "maximum": 3600,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "argv"
+      ],
+      "title": "Action",
+      "type": "object"
+    },
+    "Command": {
+      "additionalProperties": false,
+      "properties": {
+        "argv": {
+          "items": {
+            "maxLength": 4096,
+            "pattern": "^[^\\x00\\r\\n]*$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Argv",
+          "type": "array"
+        },
+        "channel": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channel"
+        },
+        "script_args": {
+          "description": "Additional zero-based argv indexes to resolve and pin as files.",
+          "items": {
+            "maximum": 63,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "title": "Script Args",
+          "type": "array"
+        }
+      },
+      "required": [
+        "argv"
+      ],
+      "title": "Command",
+      "type": "object"
+    },
+    "Component": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "label": {
+          "maxLength": 1024,
+          "title": "Label",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "heading",
+            "text",
+            "badge",
+            "metric",
+            "table",
+            "action"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "label"
+      ],
+      "title": "Component",
+      "type": "object"
+    },
+    "Identity": {
+      "additionalProperties": false,
+      "properties": {
+        "instance": {
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "title": "Instance",
+          "type": "string"
+        },
+        "role": {
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instance",
+        "role"
+      ],
+      "title": "Identity",
+      "type": "object"
+    },
+    "Parameter": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "items": {
+            "maxLength": 4096,
+            "pattern": "^[^\\x00\\r\\n]*$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Choices",
+          "type": "array"
+        },
+        "name": {
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "boolean"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "title": "Parameter",
+      "type": "object"
+    },
+    "Periodic": {
+      "additionalProperties": false,
+      "properties": {
+        "argv": {
+          "items": {
+            "maxLength": 4096,
+            "pattern": "^[^\\x00\\r\\n]*$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Argv",
+          "type": "array"
+        },
+        "channel": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channel"
+        },
+        "interval_seconds": {
+          "maximum": 31536000,
+          "minimum": 1,
+          "title": "Interval Seconds",
+          "type": "integer"
+        },
+        "script_args": {
+          "description": "Additional zero-based argv indexes to resolve and pin as files.",
+          "items": {
+            "maximum": 63,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "title": "Script Args",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "default": 60,
+          "maximum": 3600,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "argv",
+        "interval_seconds"
+      ],
+      "title": "Periodic",
+      "type": "object"
+    },
+    "Schedule": {
+      "additionalProperties": false,
+      "properties": {
+        "argv": {
+          "items": {
+            "maxLength": 4096,
+            "pattern": "^[^\\x00\\r\\n]*$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Argv",
+          "type": "array"
+        },
+        "catch_up": {
+          "const": "once",
+          "default": "once",
+          "title": "Catch Up",
+          "type": "string"
+        },
+        "channel": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channel"
+        },
+        "interval_seconds": {
+          "maximum": 31536000,
+          "minimum": 1,
+          "title": "Interval Seconds",
+          "type": "integer"
+        },
+        "overlap": {
+          "const": "skip",
+          "default": "skip",
+          "title": "Overlap",
+          "type": "string"
+        },
+        "script_args": {
+          "description": "Additional zero-based argv indexes to resolve and pin as files.",
+          "items": {
+            "maximum": 63,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "title": "Script Args",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "default": 60,
+          "maximum": 3600,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "argv",
+        "interval_seconds"
+      ],
+      "title": "Schedule",
+      "type": "object"
+    },
+    "View": {
+      "additionalProperties": false,
+      "properties": {
+        "components": {
+          "items": {
+            "$ref": "#/$defs/Component"
+          },
+          "maxItems": 64,
+          "title": "Components",
+          "type": "array"
+        },
+        "schema": {
+          "const": "bitcadence.view/1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 1024,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "title",
+        "components"
+      ],
+      "title": "View",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actions": {
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,63}$": {
+          "$ref": "#/$defs/Action"
+        }
+      },
+      "title": "Actions",
+      "type": "object"
+    },
+    "channels": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9-]{0,63}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Channels",
+      "type": "array"
+    },
+    "health": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Periodic"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "id": {
+      "pattern": "^[a-z][a-z0-9-]{0,63}$",
+      "title": "Id",
+      "type": "string"
+    },
+    "identity": {
+      "$ref": "#/$defs/Identity"
+    },
+    "job_title_prefixes": {
+      "items": {
+        "maxLength": 1024,
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Job Title Prefixes",
+      "type": "array"
+    },
+    "processes": {
+      "maxProperties": 32,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,63}$": {
+          "$ref": "#/$defs/Command"
+        }
+      },
+      "title": "Processes",
+      "type": "object"
+    },
+    "required_secrets": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9-]{0,63}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Required Secrets",
+      "type": "array"
+    },
+    "resources": {
+      "description": "Advisory only. The runtime does not enforce resources.",
+      "maxProperties": 32,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,63}$": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "title": "Resources",
+      "type": "object"
+    },
+    "schedules": {
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,63}$": {
+          "$ref": "#/$defs/Schedule"
+        }
+      },
+      "title": "Schedules",
+      "type": "object"
+    },
+    "schema": {
+      "const": "bitcadence.plugin/1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Periodic"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "views": {
+      "maxProperties": 16,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,63}$": {
+          "$ref": "#/$defs/View"
+        }
+      },
+      "title": "Views",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "id",
+    "identity"
+  ],
+  "title": "Manifest",
+  "type": "object"
+}
