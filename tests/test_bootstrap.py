@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 import os
 from pathlib import Path
 import sys
@@ -101,6 +102,8 @@ def test_task_launcher_retries_crashes_only(
 
     outcomes = iter(zip(runtime_codes, run_seconds, strict=True))
     slept = []
+    recovery_states = []
+    status_file = tmp_path / "bootstrap-status.json"
     now = 0
 
     def wait(timeout):
@@ -112,6 +115,9 @@ def test_task_launcher_retries_crashes_only(
     def sleep(seconds):
         nonlocal now
         slept.append(seconds)
+        status = json.loads(status_file.read_text(encoding="utf-8"))
+        assert status["state"] == "retrying"
+        recovery_states.append(status["restarts"])
         now += seconds
 
     class Adapter:
@@ -134,6 +140,11 @@ def test_task_launcher_retries_crashes_only(
     ) == task_code
     assert not list(outcomes)
     assert slept == delays
+    assert recovery_states == [index % 3 + 1 for index in range(len(delays))]
+    final = json.loads(status_file.read_text(encoding="utf-8"))
+    expected_state = {0: "stopped", 3: "observing"}.get(runtime_codes[-1], "exhausted")
+    assert final["state"] == expected_state
+    assert final["restarts"] == (recovery_states[-1] if recovery_states else 0)
     entries = (tmp_path / "bootstrap.log").read_text(encoding="ascii").splitlines()
     assert len(entries) == len(delays) + (task_code == 1)
     for entry in entries:

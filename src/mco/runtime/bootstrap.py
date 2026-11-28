@@ -1,7 +1,9 @@
 """Register one interactive Windows task and launch the console runtime invisibly."""
 from __future__ import annotations
 
+from contextlib import suppress
 from datetime import datetime, timezone
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -12,7 +14,7 @@ import xml.etree.ElementTree as ET
 
 from mco.agentd.tokens import current_user_sid
 
-from .paths import RuntimePaths, atomic_write
+from .paths import BOOTSTRAP_STATUS_FILE, RuntimePaths, atomic_write
 
 
 NAMESPACE = "http://schemas.microsoft.com/windows/2004/02/mit/task"
@@ -137,6 +139,13 @@ def uninstall_bootstrap() -> None:
     unregister_task(task_name(sid), sid)
 
 
+def write_bootstrap_status(runtime_dir: Path, state: str, timestamp: float, restarts: int) -> None:
+    # Monitoring evidence is best effort. A write error must not prevent launch or retry.
+    status = {"state": state, "timestamp": timestamp, "restarts": restarts}
+    with suppress(OSError):
+        atomic_write(runtime_dir / BOOTSTRAP_STATUS_FILE, (json.dumps(status) + "\n").encode("utf-8"))
+
+
 def launch_runtime(argv: list[str], cwd: Path, runtime_dir: Path, *, source: Path | None = None) -> int:
     from mco.agentd.platform.windows import WindowsAdapter
 
@@ -155,6 +164,7 @@ def launch_runtime(argv: list[str], cwd: Path, runtime_dir: Path, *, source: Pat
         # returning a nonzero process result does not reliably trigger a retry.
         restarts = 0
         while True:
+            write_bootstrap_status(runtime_dir, "starting", datetime.now(timezone.utc).timestamp(), restarts)
             child = adapter.spawn(argv, cwd, env, child_log.fileno(), child_log.fileno())
             started = time.monotonic()
             try:
@@ -163,18 +173,23 @@ def launch_runtime(argv: list[str], cwd: Path, runtime_dir: Path, *, source: Pat
             finally:
                 child.close()
                 adapter.forget_pid(child.pid)
+            finished = datetime.now(timezone.utc)
             if code in {EXIT_STOPPED, EXIT_ALREADY_RUNNING}:
+                state = "stopped" if code == EXIT_STOPPED else "observing"
+                write_bootstrap_status(runtime_dir, state, finished.timestamp(), restarts)
                 return EXIT_STOPPED
             if elapsed > STABILITY_WINDOW_SECONDS:
                 restarts = 0
-            timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            timestamp = finished.isoformat(timespec="seconds")
             if restarts == RESTART_COUNT:
                 log.write(f"{timestamp} Runtime exited {code}; restart budget exhausted.\n")
+                write_bootstrap_status(runtime_dir, "exhausted", finished.timestamp(), restarts)
                 return EXIT_CRASH
             restarts += 1
             log.write(f"{timestamp} Runtime exited {code}; "
                       f"restart {restarts}/{RESTART_COUNT} in {RESTART_INTERVAL}s.\n")
             log.flush()
+            write_bootstrap_status(runtime_dir, "retrying", finished.timestamp(), restarts)
             time.sleep(RESTART_INTERVAL)
 
 
