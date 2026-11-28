@@ -12,6 +12,8 @@ import time
 import psutil
 
 
+HEARTBEAT_FILE = "heartbeat.json"
+BOOTSTRAP_STATUS_FILE = "bootstrap-status.json"
 HEARTBEAT_SECONDS = 15.0
 # DECISIONS.md section 4: a heartbeat older than this means the runtime hung or died.
 STALE_AFTER_SECONDS = 90.0
@@ -33,7 +35,7 @@ class RuntimePaths:
 
     @property
     def heartbeat(self) -> Path:
-        return self.runtime / "heartbeat.json"
+        return self.runtime / HEARTBEAT_FILE
 
     @property
     def maintenance(self) -> Path:
@@ -68,12 +70,16 @@ def atomic_write(path: Path, content: bytes) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def read_heartbeat(paths: RuntimePaths) -> dict[str, object] | None:
+def read_json_object(path: Path) -> dict[str, object] | None:
     try:
-        data = json.loads(paths.heartbeat.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) else None
+
+
+def read_heartbeat(paths: RuntimePaths) -> dict[str, object] | None:
+    return read_json_object(paths.heartbeat)
 
 
 def heartbeat_process_alive(beat: dict[str, object] | None) -> bool:

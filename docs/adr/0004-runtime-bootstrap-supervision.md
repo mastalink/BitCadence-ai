@@ -56,6 +56,8 @@ runtime process crashes with up to three retries, with a 60-second delay before 
 A runtime that runs for more than 10 minutes resets the retry budget. The native task
 settings remain three attempts one minute apart for action launch failures.
 The launcher records crash codes and retry decisions with UTC timestamps in `~/.mco/runtime/bootstrap.log`.
+The launcher also atomically publishes its latest state, timestamp and retry count
+in the runtime directory's `bootstrap-status.json` for the external watchdog.
 The runtime process writes its standard output and standard error to `~/.mco/runtime/bootstrap-child.log`.
 
 Use `bitcadence runtime stop` for a graceful stop. To roll back bootstrap registration,
