@@ -17,7 +17,8 @@ def write(runtime_dir, filename, **document):
 
 @pytest.mark.parametrize(("state", "timestamp", "reported", "alert"), [
     ("stopped", NOW - 600, "stopped", None),
-    ("maintenance", NOW - 600, "maintenance", None),
+    ("maintenance", NOW - 90, "maintenance", None),
+    ("maintenance", NOW - 91, "stale", "heartbeat-stale"),
     ("quiesced", NOW, "quiesced", None),
     ("upgrading", NOW - 30, "upgrading", None),
     ("upgrading", NOW - 91, "stale", "heartbeat-stale"),
@@ -63,8 +64,27 @@ def test_a_newer_clean_stop_clears_an_old_exhaustion(tmp_path):
     assert (result.state, result.alert) == ("stopped", None)
 
 
-def test_a_crash_in_maintenance_stays_silent(tmp_path):
+def test_bootstrap_exhaustion_after_maintenance_alerts(tmp_path):
+    write(tmp_path, "heartbeat.json", state="maintenance", timestamp=NOW - 300, maintenance=True)
+    write(tmp_path, "bootstrap-status.json", state="exhausted", timestamp=NOW - 10, restarts=3)
+    result = check(tmp_path, now=NOW)
+    assert (result.state, result.alert, result.restarts) == ("down", "recovery-failed", 3)
+
+
+@pytest.mark.parametrize(("phase", "restarts", "reported", "alert"), [
+    ("starting", 0, "recovering", None),
+    ("retrying", 1, "recovering", None),
+    ("exhausted", 3, "down", "recovery-failed"),
+])
+def test_newer_bootstrap_status_supersedes_fresh_maintenance(tmp_path, phase, restarts, reported, alert):
     write(tmp_path, "heartbeat.json", state="crashed", timestamp=NOW - 2, maintenance=True)
+    write(tmp_path, "bootstrap-status.json", state=phase, timestamp=NOW - 1, restarts=restarts)
+    result = check(tmp_path, now=NOW)
+    assert (result.state, result.alert) == (reported, alert)
+
+
+def test_fresh_maintenance_supersedes_older_bootstrap_exhaustion(tmp_path):
+    write(tmp_path, "heartbeat.json", state="maintenance", timestamp=NOW)
     write(tmp_path, "bootstrap-status.json", state="exhausted", timestamp=NOW - 1, restarts=3)
     result = check(tmp_path, now=NOW)
     assert (result.state, result.alert) == ("maintenance", None)

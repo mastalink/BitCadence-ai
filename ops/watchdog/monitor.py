@@ -44,11 +44,6 @@ def check(runtime_dir: Path, *, now: float | None = None) -> Observation:
     bootstrap_age = age_of(bootstrap, now)
     state = heartbeat.get("state")
 
-    if age is not None and state != "stopped" and (
-        state == "maintenance" or heartbeat.get("maintenance") is True
-    ):
-        return Observation("maintenance", age=age)
-
     if bootstrap_age is not None and (age is None or bootstrap["timestamp"] >= heartbeat["timestamp"]):
         phase = bootstrap.get("state")
         restarts = bootstrap.get("restarts")
@@ -68,6 +63,8 @@ def check(runtime_dir: Path, *, now: float | None = None) -> Observation:
         return Observation("stopped", age=age)
     if age > STALE_AFTER_SECONDS:
         return Observation("stale", "heartbeat-stale", age)
+    if state == "maintenance" or heartbeat.get("maintenance") is True:
+        return Observation("maintenance", age=age)
     if state in ("running", "quiesced", "upgrading", "crashed"):
         return Observation(state, age=age)
     return Observation("unknown", "runtime-state-unknown", age)
