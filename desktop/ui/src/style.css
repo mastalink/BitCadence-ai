@@ -1,0 +1,48 @@
+:root {
+  color: #172536;
+  background: #eef2f6;
+  font-family: system-ui, sans-serif;
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  max-width: 38rem;
+  margin-inline: auto;
+  padding: clamp(1.5rem, 7vw, 4rem);
+}
+
+h1 {
+  margin: 0 0 1.5rem;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+}
+
+.status {
+  padding: 1.25rem 1.5rem;
+  background: #fff;
+  border: 1px solid #d4dee9;
+  border-radius: 0.75rem;
+}
+
+.status h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.status p {
+  margin: 0.5rem 0 0;
+  color: #4c5f74;
+}
+
+.indicator {
+  width: 0.625rem;
+  height: 0.625rem;
+  background: #94601d;
+  border-radius: 50%;
+}
